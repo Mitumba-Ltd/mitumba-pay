@@ -1,0 +1,13 @@
+name = "mitumba-pay-edge"
+main = "src/index.ts"
+compatibility_date = "2024-09-01"
+
+# Bind the whole hostname to this Worker. It routes by path and reverse-proxies
+# /widget/* to the Pages deployment (WIDGET_ORIGIN).
+routes = [
+  { pattern = "pay.mitumba.africa/*", zone_name = "mitumba.africa" }
+]
+
+[vars]
+# The Pages deployment this Worker proxies the widget from. Override per-env.
+WIDGET_ORIGIN = "https://mitumba-pay-widget.pages.dev"
