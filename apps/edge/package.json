@@ -1,0 +1,21 @@
+{
+  "name": "@mitumba/pay-edge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Edge router Worker for pay.mitumba.africa. Routes by path and reverse-proxies /widget/* to the Pages deployment. Not published.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "clean": "rimraf .turbo"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240909.0",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.5.4",
+    "wrangler": "^3.78.0"
+  }
+}

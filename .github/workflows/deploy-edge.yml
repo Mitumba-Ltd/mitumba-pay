@@ -1,0 +1,40 @@
+name: Deploy Edge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/edge/**'
+      - '.github/workflows/deploy-edge.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-edge-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Typecheck edge worker
+        run: npm run typecheck -w @mitumba/pay-edge
+
+      - name: Deploy edge Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          workingDirectory: apps/edge
+          command: deploy
