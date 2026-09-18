@@ -1,0 +1,41 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      # npm >= 11 is required for OIDC trusted publishing.
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@11
+
+      - run: npm ci
+
+      - name: Create Release Pull Request or publish to npm
+        uses: changesets/action@v1
+        with:
+          publish: npm run release
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          # Provenance via OIDC. No NPM_TOKEN is stored — releases use the
+          # npm Trusted Publisher connection attached to each package.
+          NPM_CONFIG_PROVENANCE: 'true'

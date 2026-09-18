@@ -1,0 +1,55 @@
+{
+  "name": "@mitumba/pay-native",
+  "version": "0.0.0",
+  "description": "React Native payment sheet for Mitumba Pay — native view layer over @mitumba/pay. No WebView. Provider-neutral M-Pesa / Airtel / card checkout.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mitumba-Ltd/mitumba-pay.git",
+    "directory": "packages/native"
+  },
+  "homepage": "https://github.com/Mitumba-Ltd/mitumba-pay/tree/main/packages/native#readme",
+  "bugs": {
+    "url": "https://github.com/Mitumba-Ltd/mitumba-pay/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean --external react,react-native",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch --external react,react-native",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src",
+    "clean": "rimraf dist .turbo"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-native": ">=0.74.0"
+  },
+  "dependencies": {
+    "@mitumba/pay": "0.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.5",
+    "react": "^18.3.1",
+    "rimraf": "^6.0.1",
+    "vitest": "^2.1.1"
+  }
+}

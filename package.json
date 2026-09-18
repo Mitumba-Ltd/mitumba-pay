@@ -1,0 +1,41 @@
+{
+  "name": "@mitumba/pay-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Mitumba Pay — Africa-native payment SDK. Provider-neutral client for M-Pesa, Airtel Money, card, and more.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mitumba-Ltd/mitumba-pay.git"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@11.0.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "dev": "turbo run dev",
+    "clean": "turbo run clean",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "turbo run build --filter=./packages/* && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.9",
+    "@eslint/js": "^9.10.0",
+    "@types/node": "^20.14.0",
+    "eslint": "^9.10.0",
+    "prettier": "^3.3.3",
+    "tsup": "^8.3.0",
+    "turbo": "^2.1.0",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.5.0"
+  }
+}

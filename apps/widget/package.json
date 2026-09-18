@@ -1,0 +1,20 @@
+{
+  "name": "@mitumba/pay-widget-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Hosted Mitumba Pay widget (deploys @mitumba/pay-react to pay.mitumba.africa/widget). Not published.",
+  "type": "module",
+  "scripts": {
+    "build": "echo \"widget app build placeholder\"",
+    "dev": "echo \"widget app dev placeholder\"",
+    "typecheck": "echo \"no typecheck yet\"",
+    "lint": "echo \"no lint yet\"",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@mitumba/pay-react": "0.0.0"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1"
+  }
+}
