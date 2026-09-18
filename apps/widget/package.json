@@ -1,20 +1,28 @@
 {
   "name": "@mitumba/pay-widget-app",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
-  "description": "Hosted Mitumba Pay widget (deploys @mitumba/pay-react to pay.mitumba.africa/widget). Not published.",
+  "description": "Hosted Mitumba Pay widget demo (deploys @mitumba/pay-react to pay.mitumba.africa/widget). Not published.",
   "type": "module",
   "scripts": {
-    "build": "echo \"widget app build placeholder\"",
-    "dev": "echo \"widget app dev placeholder\"",
-    "typecheck": "echo \"no typecheck yet\"",
-    "lint": "echo \"no lint yet\"",
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
-    "@mitumba/pay-react": "0.1.0"
+    "@mitumba/pay-react": "0.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "rimraf": "^6.0.1"
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0"
   }
 }

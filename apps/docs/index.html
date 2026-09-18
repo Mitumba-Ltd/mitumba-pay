@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mitumba Pay — Docs</title>
+    <style>
+      :root { --green: #3D9A52; --earth: #A06235; --ink: #1A1A1A; --muted: #6B6B6B; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: system-ui, sans-serif; color: var(--ink); line-height: 1.6; }
+      header { background: var(--green); color: #fff; padding: 48px 24px; }
+      header h1 { margin: 0; font-size: 32px; }
+      header p { margin: 8px 0 0; opacity: 0.9; }
+      main { max-width: 760px; margin: 0 auto; padding: 32px 24px 80px; }
+      h2 { color: var(--green); margin-top: 40px; }
+      code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      pre { background: #1A1A1A; color: #EDEDED; padding: 16px; border-radius: 10px; overflow: auto; font-size: 13px; }
+      code:not(pre code) { background: #F0F0EE; padding: 2px 6px; border-radius: 4px; font-size: 90%; }
+      table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+      th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #E4E4E4; font-size: 14px; }
+      .note { background: #FBF6EF; border-left: 4px solid var(--earth); padding: 12px 16px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Mitumba Pay</h1>
+      <p>Africa-native payment SDK — M-Pesa, Airtel Money, card, and more, behind one provider-neutral client.</p>
+    </header>
+    <main>
+      <h2>Install</h2>
+      <pre><code>npm install @mitumba/pay</code></pre>
+
+      <h2>Core principle</h2>
+      <p>
+        You choose a <strong>method</strong> (<code>mobile_money</code> or <code>card</code>). The
+        backend chooses the <strong>provider</strong>. Provider identifiers are observable
+        metadata, never routing choices — the backend can add MTN MoMo, Vodacom, Paystack, etc.
+        without an SDK release. Always follow <code>next_action</code>; never branch on a provider
+        switch.
+      </p>
+
+      <h2>Quick start</h2>
+      <pre><code>import { MitumbaPay } from '@mitumba/pay'
+
+const pay = new MitumbaPay({ token: () => getAccessToken() })
+
+const { next_action } = await pay.initiateCheckout({
+  order_id: 'ord_123',
+  idempotency_key: crypto.randomUUID(),
+  method: { type: 'mobile_money', phone: '+254712345678' },
+})
+
+if (next_action.type === 'redirect') {
+  window.location.href = next_action.url
+}
+
+const final = await pay.pollCheckoutStatus('ord_123', {
+  onUpdate: (s) => console.log(s.checkout_status),
+})</code></pre>
+
+      <h2>Packages</h2>
+      <table>
+        <tr><th>Package</th><th>What it is</th></tr>
+        <tr><td><code>@mitumba/pay-contract</code></td><td>Wire contract: types + zod schemas + version.</td></tr>
+        <tr><td><code>@mitumba/pay</code></td><td>Headless, provider-neutral client + polling.</td></tr>
+        <tr><td><code>@mitumba/pay-react</code></td><td>React web payment widget.</td></tr>
+        <tr><td><code>@mitumba/pay-native</code></td><td>React Native payment sheet (no WebView).</td></tr>
+      </table>
+
+      <h2>Checkout status</h2>
+      <p>Poll <code>getCheckoutStatus(orderId)</code> after initiation. It honors server-authored
+      <code>poll_after_ms</code> (with jitter), stops on <code>terminal</code>, and reports
+      <code>retryable</code>. Amounts are integer minor units (<code>KES 1,250.00 === 125000</code>).</p>
+
+      <div class="note">
+        <strong>Note:</strong> <code>initiateCheckout</code> targets <code>POST /pay/checkout/initiate</code>,
+        whose backend route may be pending deployment in some environments. Verify before production
+        use. <code>getCheckoutStatus</code> is live.
+      </div>
+
+      <p style="margin-top: 40px; color: var(--muted); font-size: 13px;">
+        MIT licensed · <a href="https://github.com/Mitumba-Ltd/mitumba-pay">github.com/Mitumba-Ltd/mitumba-pay</a>
+      </p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
