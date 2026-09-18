@@ -1,0 +1,52 @@
+name: Deploy Widget
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/widget/**'
+      - 'packages/react/**'
+      - 'packages/core/**'
+      - 'packages/contract/**'
+      - '.github/workflows/deploy-widget.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-widget-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # Build the widget and its workspace dependencies
+      # (@mitumba/pay-contract -> @mitumba/pay -> @mitumba/pay-react -> widget).
+      - name: Build widget
+        run: npx turbo run build --filter=@mitumba/pay-widget-app
+
+      - name: Create Pages project if missing
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: pages project create mitumba-pay-widget --production-branch=main
+        continue-on-error: true
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: pages deploy apps/widget/dist --project-name=mitumba-pay-widget --branch=main
