@@ -1,0 +1,57 @@
+{
+  "name": "@mitumba/pay-react",
+  "version": "0.0.0",
+  "description": "React payment widget for Mitumba Pay — the web view layer over @mitumba/pay. Provider-neutral M-Pesa / Airtel / card checkout UI.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mitumba-Ltd/mitumba-pay.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/Mitumba-Ltd/mitumba-pay/tree/main/packages/react#readme",
+  "bugs": {
+    "url": "https://github.com/Mitumba-Ltd/mitumba-pay/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean --external react,react-dom",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch --external react,react-dom",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src",
+    "clean": "rimraf dist .turbo"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "dependencies": {
+    "@mitumba/pay": "0.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "rimraf": "^6.0.1",
+    "vitest": "^2.1.1"
+  }
+}
