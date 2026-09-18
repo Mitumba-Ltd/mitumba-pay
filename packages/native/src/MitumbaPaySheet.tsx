@@ -1,4 +1,12 @@
-import { Modal, View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native'
+import {
+  Modal,
+  View,
+  Text,
+  Pressable,
+  ActivityIndicator,
+  StyleSheet,
+  type GestureResponderEvent,
+} from 'react-native'
 import { payTheme } from './theme'
 import { type UseCheckoutResult, type CheckoutPhase } from './useCheckout'
 
@@ -45,7 +53,10 @@ export function MitumbaPaySheet({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.scrim} onPress={onClose} accessibilityRole="button">
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={styles.sheet}
+          onPress={(e: GestureResponderEvent) => e.stopPropagation()}
+        >
           <View style={styles.handle} />
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
