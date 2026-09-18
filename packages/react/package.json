@@ -1,6 +1,6 @@
 {
   "name": "@mitumba/pay-react",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "React payment widget for Mitumba Pay — the web view layer over @mitumba/pay. Provider-neutral M-Pesa / Airtel / card checkout UI.",
   "license": "MIT",
   "repository": {
@@ -44,7 +44,7 @@
     "react-dom": ">=18.0.0"
   },
   "dependencies": {
-    "@mitumba/pay": "0.0.0"
+    "@mitumba/pay": "0.1.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.5",

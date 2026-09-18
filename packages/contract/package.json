@@ -1,6 +1,6 @@
 {
   "name": "@mitumba/pay-contract",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Wire contract (types + zod schemas) for the Mitumba Pay HTTP API. Provider-neutral. Zero backend knowledge.",
   "license": "MIT",
   "repository": {
