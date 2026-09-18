@@ -1,0 +1,49 @@
+{
+  "name": "@mitumba/pay-contract",
+  "version": "0.0.0",
+  "description": "Wire contract (types + zod schemas) for the Mitumba Pay HTTP API. Provider-neutral. Zero backend knowledge.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mitumba-Ltd/mitumba-pay.git",
+    "directory": "packages/contract"
+  },
+  "homepage": "https://github.com/Mitumba-Ltd/mitumba-pay/tree/main/packages/contract#readme",
+  "bugs": {
+    "url": "https://github.com/Mitumba-Ltd/mitumba-pay/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "vitest": "^2.1.1"
+  }
+}
