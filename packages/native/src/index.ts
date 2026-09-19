@@ -7,7 +7,11 @@
 export { useCheckout } from './useCheckout'
 export type { CheckoutPhase, UseCheckoutState, UseCheckoutResult } from './useCheckout'
 export { MitumbaPaySheet } from './MitumbaPaySheet'
-export type { MitumbaPaySheetProps } from './MitumbaPaySheet'
+export type {
+  MitumbaPaySheetProps,
+  NativePaymentMethod,
+  NativeLineItem,
+} from './MitumbaPaySheet'
 export { payTheme } from './theme'
 export type { PayTheme } from './theme'
 
