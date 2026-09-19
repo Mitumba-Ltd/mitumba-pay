@@ -68,4 +68,9 @@ describe('MitumbaPayWidget', () => {
     expect(screen.getByText(/enter your PIN/i)).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Pay KES/ })).toBeNull()
   })
+
+  it('renders the supplied brand logo instead of the fallback letter mark', () => {
+    render(<MitumbaPayWidget {...baseProps} logoUrl="/widget/mitumba-pay-logo.png" />)
+    expect(screen.getAllByRole('img', { name: 'Mitumba Pay' }).length).toBeGreaterThanOrEqual(1)
+  })
 })
