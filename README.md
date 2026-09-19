@@ -48,6 +48,11 @@ Provider identifiers are observable metadata, not routing choices — the backen
 MTN MoMo, Vodacom, Paystack, etc. without an SDK release. Follow `next_action`, never a
 provider `switch`.
 
+## Architecture
+
+- [Country-aware hosted checkout sessions](docs/rfcs/0001-country-aware-hosted-checkout.md)
+- [Repository architecture](ARCHITECTURE.md)
+
 ## Development
 
 ```bash
