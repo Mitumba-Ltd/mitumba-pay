@@ -35,7 +35,7 @@
     "build": "tsup src/index.ts --format esm,cjs --dts --clean --external react,react-dom",
     "dev": "tsup src/index.ts --format esm,cjs --dts --watch --external react,react-dom",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --environment jsdom --maxWorkers=1 --minWorkers=1",
     "lint": "eslint src",
     "clean": "rimraf dist .turbo"
   },
@@ -47,8 +47,11 @@
     "@mitumba/pay": "0.1.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.0",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
+    "jsdom": "26.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "rimraf": "^6.0.1",
