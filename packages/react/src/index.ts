@@ -15,6 +15,9 @@ export type {
   MitumbaPayButtonProps,
   MitumbaPayWidgetProps,
   WidgetMethod,
+  WidgetLineItem,
+  WidgetMetadataItem,
+  WidgetSavedPhone,
 } from './components'
 export { payTheme } from './theme'
 export type { PayTheme } from './theme'

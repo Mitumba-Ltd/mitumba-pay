@@ -1,12 +1,7 @@
 /**
  * Minimal ambient declarations for the React Native primitives this package
- * uses. `react-native` is a *peer dependency* — the host app provides the real
- * implementation and full types. This shim lets `@mitumba/pay-native` typecheck
- * and emit its own `.d.ts` without installing the entire RN toolchain at build
- * time. It intentionally declares only what MitumbaPaySheet.tsx references.
- *
- * When the consuming app installs react-native, its richer types take
- * precedence at the app's type-checking boundary.
+ * uses. `react-native` is a peer dependency; the host provides the real runtime
+ * and full types. This keeps the package build independent of a full RN install.
  */
 declare module 'react-native' {
   import type { ComponentType, ReactNode } from 'react'
@@ -23,7 +18,8 @@ declare module 'react-native' {
     style?: StyleValue
     children?: ReactNode
     accessibilityRole?: string
-    accessibilityState?: { busy?: boolean; disabled?: boolean }
+    accessibilityLabel?: string
+    accessibilityState?: { busy?: boolean; disabled?: boolean; selected?: boolean }
     accessibilityLiveRegion?: 'none' | 'polite' | 'assertive'
   }
 
@@ -33,6 +29,22 @@ declare module 'react-native' {
   }
 
   export type TextProps = ViewProps
+
+  export interface TextInputProps extends ViewProps {
+    value?: string
+    onChangeText?: (value: string) => void
+    placeholder?: string
+    placeholderTextColor?: string
+    keyboardType?: 'default' | 'phone-pad' | 'number-pad' | 'email-address'
+    autoComplete?: string
+    editable?: boolean
+  }
+
+  export interface ScrollViewProps extends ViewProps {
+    contentContainerStyle?: StyleValue
+    bounces?: boolean
+    showsVerticalScrollIndicator?: boolean
+  }
 
   export interface ModalProps {
     visible?: boolean
@@ -49,11 +61,14 @@ declare module 'react-native' {
 
   export const View: ComponentType<ViewProps>
   export const Text: ComponentType<TextProps>
+  export const TextInput: ComponentType<TextInputProps>
+  export const ScrollView: ComponentType<ScrollViewProps>
   export const Pressable: ComponentType<PressableProps>
   export const Modal: ComponentType<ModalProps>
   export const ActivityIndicator: ComponentType<ActivityIndicatorProps>
 
   export const StyleSheet: {
     create<T extends Record<string, StyleValue>>(styles: T): T
+    absoluteFillObject: NamedStyle
   }
 }
