@@ -134,6 +134,7 @@ export function App() {
               orderId={config.orderId}
               metadata={config.metadata}
               merchantName={config.merchantName}
+              logoUrl="/widget/mitumba-pay-logo.png"
               defaultPhone={config.defaultPhone}
               savedPhones={config.savedPhones}
               methods={config.methods}
