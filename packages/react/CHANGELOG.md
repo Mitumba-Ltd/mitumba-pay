@@ -1,5 +1,13 @@
 # @mitumba/pay-react
 
+## 0.4.0
+
+### Minor Changes
+
+- ae2c28b: Add optional `logoUrl` branding to `MitumbaPayWidget`. The official hosted checkout now
+  uses the approved Mitumba Pay logo from its own static assets instead of the fallback
+  letter/text lockup.
+
 ## 0.3.0
 
 ### Minor Changes
