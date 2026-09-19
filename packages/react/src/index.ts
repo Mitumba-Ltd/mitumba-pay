@@ -11,7 +11,11 @@ export type {
   UseCheckoutResult,
 } from './useCheckout'
 export { MitumbaPayButton, MitumbaPayWidget } from './components'
-export type { MitumbaPayButtonProps, MitumbaPayWidgetProps } from './components'
+export type {
+  MitumbaPayButtonProps,
+  MitumbaPayWidgetProps,
+  WidgetMethod,
+} from './components'
 export { payTheme } from './theme'
 export type { PayTheme } from './theme'
 
