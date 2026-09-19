@@ -1,5 +1,15 @@
 # @mitumba/pay-react
 
+## 0.2.0
+
+### Minor Changes
+
+- 20c582e: Redesign `MitumbaPayWidget` as a split-panel checkout (green summary panel + white
+  method form), matching the Mitumba brand. Payment-method tabs (Mobile Payment first for
+  the Kenya market, then Card) select a _method_ only — never a provider. The `onPay`
+  callback now receives `{ method, phone? }`, and the widget accepts `amountLabel`,
+  `lineItems`, `totalLabel`, `orderId`, and `methods` props.
+
 ## 0.1.0
 
 ### Minor Changes
