@@ -45,7 +45,7 @@ export default {
 } satisfies ExportedHandler<Env>
 
 async function proxyWidget(request: Request, url: URL, env: Env): Promise<Response> {
-  const origin = env.WIDGET_ORIGIN.replace(/\/+$/, '')
+  const origin = stripTrailingSlashes(env.WIDGET_ORIGIN)
   // The Pages project serves its files at the origin ROOT (dist/ -> /). The
   // Worker owns the /widget prefix, so strip it before proxying:
   //   /widget            -> /
@@ -111,6 +111,16 @@ function withHtmlType(headers: Headers): Headers {
 function isDocumentRequest(request: Request): boolean {
   const accept = request.headers.get('accept') ?? ''
   return accept.includes('text/html')
+}
+
+/**
+ * Remove trailing '/' characters with a linear scan. Avoids the polynomial
+ * backtracking a `/\/+$/` regex can exhibit on adversarial input (ReDoS).
+ */
+function stripTrailingSlashes(value: string): string {
+  let end = value.length
+  while (end > 0 && value.charCodeAt(end - 1) === 47 /* '/' */) end--
+  return value.slice(0, end)
 }
 
 function rootPage(): string {
