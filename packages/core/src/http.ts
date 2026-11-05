@@ -50,7 +50,7 @@ export class HttpClient {
     options?: RequestOptions,
   ): Promise<T> {
     const url = `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`
-    const token = await this.resolveToken()
+    const token = options?.token ?? (await this.resolveToken())
 
     const headers = new Headers()
     if (body !== undefined) headers.set('Content-Type', 'application/json')

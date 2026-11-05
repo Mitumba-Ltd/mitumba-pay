@@ -23,4 +23,11 @@ export interface MitumbaPayConfig {
 export interface RequestOptions {
   /** Abort signal to cancel the in-flight request. */
   signal?: AbortSignal
+  /**
+   * Per-request bearer override. When set, this value is sent as
+   * `Authorization: Bearer <token>` for this request instead of the client's
+   * configured token. Used for session-scoped calls that authenticate with a
+   * checkout-session client secret rather than the buyer bearer token.
+   */
+  token?: string
 }

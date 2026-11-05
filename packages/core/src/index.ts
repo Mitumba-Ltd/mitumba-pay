@@ -9,8 +9,14 @@ export { HttpClient } from './http'
 export { PayError } from './errors'
 export { DEFAULT_BASE_URL } from './config'
 export type { MitumbaPayConfig, RequestOptions } from './config'
-export { pollCheckoutStatus } from './polling'
-export type { PollOptions, FetchStatus } from './polling'
+export { pollCheckoutStatus, pollStatus } from './polling'
+export type {
+  PollOptions,
+  PollStatusOptions,
+  PollSessionOptions,
+  PollableStatus,
+  FetchStatus,
+} from './polling'
 
 // Re-export the wire contract for convenience so consumers need one import.
 export * from '@mitumba/pay-contract'
