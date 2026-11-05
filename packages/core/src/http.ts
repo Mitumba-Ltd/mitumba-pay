@@ -18,7 +18,7 @@ export class HttpClient {
   private readonly tokenSource: MitumbaPayConfig['token']
 
   constructor(config: MitumbaPayConfig = {}) {
-    this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '')
+    this.baseUrl = stripTrailingSlashes(config.baseUrl ?? DEFAULT_BASE_URL)
     this.maxRetries = config.maxRetries ?? 3
     this.fetchImpl = config.fetch ?? globalThis.fetch
     this.debug = config.debug ?? false
@@ -108,4 +108,14 @@ export class HttpClient {
 function backoff(attempt: number): Promise<void> {
   const ms = Math.min(2 ** attempt * 100, 2000)
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Remove trailing '/' characters with a linear scan. Avoids the polynomial
+ * backtracking a `/\/+$/` regex can exhibit on adversarial input (ReDoS).
+ */
+function stripTrailingSlashes(value: string): string {
+  let end = value.length
+  while (end > 0 && value.charCodeAt(end - 1) === 47 /* '/' */) end--
+  return value.slice(0, end)
 }
