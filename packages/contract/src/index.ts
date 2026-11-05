@@ -7,6 +7,7 @@
  */
 export * from './version'
 export * from './money'
+export * from './market'
 export * from './provider'
 export * from './order'
 export * from './checkout'
