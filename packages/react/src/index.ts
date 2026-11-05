@@ -10,6 +10,14 @@ export type {
   UseCheckoutState,
   UseCheckoutResult,
 } from './useCheckout'
+
+// Session-driven checkout controller (RFC 0001).
+export { useCheckoutSession } from './useCheckoutSession'
+export type {
+  SessionPhase,
+  UseCheckoutSessionState,
+  UseCheckoutSessionResult,
+} from './useCheckoutSession'
 export { MitumbaPayButton, MitumbaPayWidget } from './components'
 export type {
   MitumbaPayButtonProps,
@@ -47,4 +55,9 @@ export type {
   InitiateCheckoutInput,
   CheckoutStatusResponse,
   CheckoutNextAction,
+  CheckoutSessionContext,
+  CheckoutSessionStatusResponse,
+  CheckoutMethodDescriptor,
+  SessionPaymentMethod,
+  Money,
 } from '@mitumba/pay'
