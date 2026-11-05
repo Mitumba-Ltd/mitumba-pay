@@ -12,6 +12,18 @@ export type {
   NativePaymentMethod,
   NativeLineItem,
 } from './MitumbaPaySheet'
+
+// Session-driven checkout (RFC 0001).
+export { useCheckoutSession } from './useCheckoutSession'
+export type {
+  SessionPhase,
+  UseCheckoutSessionState,
+  UseCheckoutSessionResult,
+} from './useCheckoutSession'
+export { MitumbaPaySessionSheet } from './MitumbaPaySessionSheet'
+export type { MitumbaPaySessionSheetProps } from './MitumbaPaySessionSheet'
+export { formatMoney } from './formatMoney'
+
 export { payTheme } from './theme'
 export type { PayTheme } from './theme'
 
@@ -21,4 +33,10 @@ export type {
   InitiateCheckoutInput,
   CheckoutStatusResponse,
   CheckoutNextAction,
+  CheckoutSessionContext,
+  CheckoutSessionStatusResponse,
+  CreateCheckoutSessionInput,
+  CreateCheckoutSessionResponse,
+  SessionPaymentMethod,
+  Money,
 } from '@mitumba/pay'
