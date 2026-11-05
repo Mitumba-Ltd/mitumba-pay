@@ -1,6 +1,6 @@
 {
   "name": "@mitumba/pay",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Africa-native payment SDK — provider-neutral headless client for M-Pesa, Airtel Money, card, and more. Zero UI, zero provider knowledge.",
   "license": "MIT",
   "repository": {

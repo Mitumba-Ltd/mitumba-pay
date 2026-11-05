@@ -1,5 +1,12 @@
 # @mitumba/pay-native
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [e769234]
+  - @mitumba/pay@0.2.1
+
 ## 0.3.0
 
 ### Minor Changes
