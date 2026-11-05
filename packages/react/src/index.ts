@@ -36,6 +36,10 @@ export type {
   BridgeMessage,
 } from './bridge'
 
+// Framework-neutral hosted-checkout launcher (RFC 0001).
+export { openMitumbaPay, DEFAULT_HOSTED_WIDGET_URL } from './launcher'
+export type { OpenMitumbaPayOptions, MitumbaPayResult, MitumbaPayOutcome } from './launcher'
+
 // Convenience re-exports so widget consumers need a single import.
 export { MitumbaPay, PayError } from '@mitumba/pay'
 export type {
