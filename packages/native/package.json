@@ -1,6 +1,6 @@
 {
   "name": "@mitumba/pay-native",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "React Native payment sheet for Mitumba Pay — native view layer over @mitumba/pay. No WebView. Provider-neutral M-Pesa / Airtel / card checkout.",
   "license": "MIT",
   "repository": {
