@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { PAY_CONTRACT_VERSION } from './version'
 import { moneySchema, type Money } from './money'
 import { paymentMethodTypeSchema, type PaymentMethodType } from './market'
+import { type CheckoutNextAction, checkoutNextActionSchema } from './checkout'
 
 /**
  * Checkout sessions (RFC 0001 ยง6-8). A session is the long-term public
@@ -164,4 +165,134 @@ export const checkoutSessionContextSchema = z.object({
   cancel_url: z.string().nullable(),
   expires_at: z.string(),
   server_time: z.string(),
+})
+
+// ---------------------------------------------------------------------------
+// Attempt initiation
+// ---------------------------------------------------------------------------
+
+/**
+ * Generic E.164: a leading '+' and 1-15 digits. The public session contract
+ * does NOT lock phones to a single country — the backend validates the number
+ * against the session's market. (The legacy order-based contract keeps its
+ * Kenya-only `KENYAN_MSISDN`.)
+ */
+export const E164_PHONE = /^\+[1-9]\d{1,14}$/
+
+/**
+ * Buyer-selected method for a session attempt. The client picks a method type
+ * and supplies its required input; the backend picks the provider. Card carries
+ * no PAN/CVV/token/email — the backend obtains buyer identity itself.
+ */
+export type SessionPaymentMethod =
+  | { type: 'mobile_money'; phone: string }
+  | { type: 'card' }
+
+export const sessionPaymentMethodSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('mobile_money'), phone: z.string().regex(E164_PHONE) }),
+  z.object({ type: z.literal('card') }),
+])
+
+/**
+ * Body of `POST /pay/checkout-sessions/:session_id/attempts`. No country — the
+ * session is authoritative for market, amount, and currency.
+ */
+export interface CreateAttemptInput {
+  idempotency_key: string
+  method: SessionPaymentMethod
+}
+
+export const createAttemptInputSchema = z.object({
+  idempotency_key: z.string().min(1),
+  method: sessionPaymentMethodSchema,
+})
+
+/**
+ * What the client must do after an attempt. Provider-neutral: wait for an
+ * out-of-band confirmation, or open an absolute HTTPS redirect. This is the
+ * same shape as the legacy order-based `CheckoutNextAction` (reused, not
+ * redeclared, to keep one canonical type).
+ */
+export const sessionNextActionSchema = checkoutNextActionSchema
+
+// ---------------------------------------------------------------------------
+// Attempt projection and session status
+// ---------------------------------------------------------------------------
+
+/** Per-attempt payment state. Only `initiated` is non-terminal. */
+export type SessionAttemptStatus = 'initiated' | 'funded' | 'failed' | 'refunded' | 'cancelled'
+
+export const sessionAttemptStatusSchema = z.enum([
+  'initiated',
+  'funded',
+  'failed',
+  'refunded',
+  'cancelled',
+])
+
+/** Public projection of one payment attempt within a session. */
+export interface CheckoutAttempt {
+  id: string
+  sequence: number
+  /** Observable metadata only — never drives client continuation. */
+  provider: string
+  status: SessionAttemptStatus
+  terminal: boolean
+  next_action: CheckoutNextAction | null
+  created_at: string
+  updated_at: string
+}
+
+export const checkoutAttemptSchema = z.object({
+  id: z.string(),
+  sequence: z.number().int(),
+  provider: z.string().min(1),
+  status: sessionAttemptStatusSchema,
+  terminal: z.boolean(),
+  next_action: sessionNextActionSchema.nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+})
+
+/** Aggregate, buyer-visible checkout state for a session. */
+export type SessionCheckoutStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded'
+
+export const sessionCheckoutStatusSchema = z.enum([
+  'pending',
+  'paid',
+  'failed',
+  'cancelled',
+  'refunded',
+])
+
+/**
+ * Response of the session status resource (distinct from context). A retryable
+ * failed/cancelled attempt returns the session to `open`; the client offers
+ * another attempt with a new idempotency key. `complete`, `expired`, and
+ * session-level `cancelled` are terminal. Unknown states stay `pending` and are
+ * never converted to failure by elapsed client time alone.
+ */
+export interface CheckoutSessionStatusResponse {
+  version: typeof PAY_CONTRACT_VERSION
+  session_id: string
+  session_status: CheckoutSessionStatus
+  checkout_status: SessionCheckoutStatus
+  terminal: boolean
+  retryable: boolean
+  latest_attempt: CheckoutAttempt | null
+  server_time: string
+  /** Server-authored guidance (ms) for non-overlapping polling. Honor + jitter. */
+  poll_after_ms: number
+}
+
+export const checkoutSessionStatusResponseSchema = z.object({
+  version: z.literal(PAY_CONTRACT_VERSION),
+  session_id: z.string().min(1),
+  session_status: checkoutSessionStatusSchema,
+  checkout_status: sessionCheckoutStatusSchema,
+  terminal: z.boolean(),
+  retryable: z.boolean(),
+  latest_attempt: checkoutAttemptSchema.nullable(),
+  server_time: z.string(),
+  poll_after_ms: z.number().int().nonnegative(),
 })
