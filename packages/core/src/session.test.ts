@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { MitumbaPay, PayError } from './index'
+import { MitumbaPay, PayError, pollStatus } from './index'
+import type { CheckoutSessionStatusResponse } from '@mitumba/pay-contract'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -146,5 +147,47 @@ describe('MitumbaPay sessions', () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ error: 'unauthorized' }, 401))
     const pay = new MitumbaPay({ fetch: fetchImpl })
     await expect(pay.getCheckoutSessionStatus('cs_1', 'bad')).rejects.toBeInstanceOf(PayError)
+  })
+})
+
+describe('session polling', () => {
+  const base: CheckoutSessionStatusResponse = {
+    version: 1,
+    session_id: 'cs_1',
+    session_status: 'open',
+    checkout_status: 'pending',
+    terminal: false,
+    retryable: false,
+    latest_attempt: null,
+    server_time: '2026-01-01T00:00:00Z',
+    poll_after_ms: 1,
+  }
+
+  it('polls session status to a terminal paid state', async () => {
+    const seq: CheckoutSessionStatusResponse[] = [
+      { ...base },
+      { ...base, session_status: 'complete', checkout_status: 'paid', terminal: true },
+    ]
+    let i = 0
+    const fetchImpl = vi.fn().mockImplementation(async () =>
+      jsonResponse(seq[Math.min(i++, seq.length - 1)]),
+    )
+    const pay = new MitumbaPay({ fetch: fetchImpl })
+    const updates: string[] = []
+    const last = await pay.pollCheckoutSessionStatus('cs_1', 'csec_1', {
+      jitter: 0,
+      onUpdate: (s) => updates.push(s.checkout_status),
+    })
+    expect(last?.terminal).toBe(true)
+    expect(updates).toEqual(['pending', 'paid'])
+  })
+
+  it('stops and reports a retryable session state', async () => {
+    const fetchOnce = vi
+      .fn()
+      .mockResolvedValue({ ...base, checkout_status: 'failed', retryable: true })
+    const last = await pollStatus<CheckoutSessionStatusResponse>(fetchOnce, { jitter: 0 })
+    expect(last?.retryable).toBe(true)
+    expect(fetchOnce).toHaveBeenCalledTimes(1)
   })
 })

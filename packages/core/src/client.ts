@@ -22,7 +22,7 @@ import {
 } from '@mitumba/pay-contract'
 import { HttpClient } from './http'
 import type { MitumbaPayConfig, RequestOptions } from './config'
-import { pollCheckoutStatus, type PollOptions } from './polling'
+import { pollCheckoutStatus, pollStatus, type PollOptions, type PollSessionOptions } from './polling'
 
 /**
  * The Mitumba Pay client. Headless and provider-neutral: it exposes only the
@@ -170,5 +170,21 @@ export class MitumbaPay {
       { ...options, token: clientSecret },
     )
     return checkoutSessionStatusResponseSchema.parse(raw)
+  }
+
+  /**
+   * Convenience: poll {@link getCheckoutSessionStatus} until a terminal or
+   * retryable state, honoring server-authored `poll_after_ms` with jitter. A
+   * client-deadline timeout means "still confirming," never payment failure.
+   */
+  async pollCheckoutSessionStatus(
+    sessionId: string,
+    clientSecret: string,
+    options?: PollSessionOptions,
+  ): Promise<CheckoutSessionStatusResponse | null> {
+    return pollStatus<CheckoutSessionStatusResponse>(
+      (signal) => this.getCheckoutSessionStatus(sessionId, clientSecret, { signal }),
+      options,
+    )
   }
 }
