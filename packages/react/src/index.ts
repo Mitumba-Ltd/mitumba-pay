@@ -22,6 +22,24 @@ export type {
 export { payTheme } from './theme'
 export type { PayTheme } from './theme'
 
+// Hosted-checkout bridge v2 protocol (RFC 0001).
+export {
+  BRIDGE_VERSION_V2,
+  MITUMBA_PAY_MESSAGE,
+  isBridgeMessage,
+  isBridgeInitMessage,
+} from './bridge'
+export type {
+  MitumbaPayMessageType,
+  BridgeInitPayload,
+  BridgeInitMessage,
+  BridgeMessage,
+} from './bridge'
+
+// Framework-neutral hosted-checkout launcher (RFC 0001).
+export { openMitumbaPay, DEFAULT_HOSTED_WIDGET_URL } from './launcher'
+export type { OpenMitumbaPayOptions, MitumbaPayResult, MitumbaPayOutcome } from './launcher'
+
 // Convenience re-exports so widget consumers need a single import.
 export { MitumbaPay, PayError } from '@mitumba/pay'
 export type {
