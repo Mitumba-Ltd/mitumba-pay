@@ -1,11 +1,9 @@
 import { z } from 'zod'
 
 /**
- * A provider-neutral, market-neutral monetary amount.
- *
- * Replaces the legacy `{ currency: 'KES'; minor_units }` shape used by the
- * order-based checkout-status contract. New session contracts use open ISO 4217
- * currency strings so adding a market never requires an SDK release.
+ * A provider-neutral, market-neutral monetary amount, used by every contract (order-based checkout
+ * status included). Open ISO 4217 currency strings, so adding a market never requires an SDK
+ * release.
  *
  * `minor_units` is the amount in the currency's smallest indivisible unit
  * (e.g. KES 1,250.00 === 125000 cents). It is always a nonnegative safe integer:

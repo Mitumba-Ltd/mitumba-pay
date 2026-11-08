@@ -17,7 +17,7 @@ describe('pay-contract schemas', () => {
     expect(parsed.method.type).toBe('mobile_money')
   })
 
-  it('rejects a non-Kenyan phone number', () => {
+  it('rejects a phone that is not E.164', () => {
     expect(() =>
       initiateCheckoutInputSchema.parse({
         order_id: 'ord_123',
@@ -25,6 +25,17 @@ describe('pay-contract schemas', () => {
         method: { type: 'mobile_money', phone: '0712345678' },
       }),
     ).toThrow()
+  })
+
+  it('accepts an E.164 phone from any market; the backend checks it against the order', () => {
+    for (const phone of ['+256712345678', '+255712345678', '+2348012345678']) {
+      const parsed = initiateCheckoutInputSchema.parse({
+        order_id: 'ord_123',
+        idempotency_key: 'idem_abc',
+        method: { type: 'mobile_money', phone },
+      })
+      expect(parsed.method).toEqual({ type: 'mobile_money', phone })
+    }
   })
 
   it('accepts a card initiate input with no extra fields', () => {
@@ -83,7 +94,31 @@ describe('pay-contract schemas', () => {
     expect(parsed.checkout_status).toBe('paid')
   })
 
-  it('exposes the Kenyan MSISDN pattern', () => {
+  it('accepts any ISO 4217 currency on checkout status, and rejects malformed amounts', () => {
+    const base = {
+      version: PAY_CONTRACT_VERSION,
+      order_id: 'ord_123',
+      order: { type: 'retail', status: 'payment_pending' },
+      checkout_status: 'pending',
+      terminal: false,
+      retryable: false,
+      latest_attempt: null,
+      attempt_count: 0,
+      order_updated_at: '2026-01-01T00:01:00Z',
+      status_updated_at: '2026-01-01T00:01:00Z',
+      server_time: '2026-01-01T00:02:00Z',
+      poll_after_ms: 2000,
+    }
+    expect(checkoutStatusResponseSchema.parse({ ...base, amount: { currency: 'UGX', minor_units: 4500000 } }).amount).toEqual({
+      currency: 'UGX',
+      minor_units: 4500000,
+    })
+    expect(() => checkoutStatusResponseSchema.parse({ ...base, amount: { currency: 'ugx', minor_units: 1 } })).toThrow()
+    expect(() => checkoutStatusResponseSchema.parse({ ...base, amount: { currency: 'KES', minor_units: -1 } })).toThrow()
+    expect(() => checkoutStatusResponseSchema.parse({ ...base, amount: { currency: 'KES', minor_units: 1.5 } })).toThrow()
+  })
+
+  it('keeps the deprecated Kenyan MSISDN pattern for existing imports', () => {
     expect(KENYAN_MSISDN.test('+254712345678')).toBe(true)
     expect(KENYAN_MSISDN.test('+1234567890')).toBe(false)
   })
