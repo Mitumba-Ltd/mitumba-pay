@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { MitumbaGlass, MitumbaPrimaryButton, MitumbaThemeProvider } from '@mitumba/ui'
-import { useCheckout, MitumbaPayWidget, type WidgetMethod } from '@mitumba/pay-react'
+import { useCheckout, MitumbaPayWidget, type WidgetPayInput } from '@mitumba/pay-react'
 import {
   MESSAGE,
   isInitMessage,
@@ -23,10 +23,15 @@ const PREVIEW: HostedCheckoutConfig = {
   merchantName: 'Mitumba',
   defaultPhone: '+254712345678',
   savedPhones: [
-    { label: '••• 5678', value: '+254712345678' },
-    { label: '••• 1042', value: '+254733331042' },
+    { label: 'M-Pesa ••• 678', value: '+254712345678', network: 'mpesa' },
+    { label: 'Work · Airtel Money ••• 042', value: '+254733331042', network: 'airtel_money' },
   ],
   methods: ['mobile_money', 'card'],
+  networks: [
+    { id: 'mpesa', name: 'M-Pesa' },
+    { id: 'airtel_money', name: 'Airtel Money' },
+  ],
+  defaultNetwork: 'mpesa',
   supportLabel: 'Available 24/7',
 }
 
@@ -98,15 +103,15 @@ export function App() {
     if (event.target === event.currentTarget && embedded) close()
   }
 
-  const handlePay = ({ method, phone }: { method: WidgetMethod; phone?: string }) => {
+  const handlePay = (input: WidgetPayInput) => {
     if (!config?.token) return
     const key = config.idempotencyKey ?? idempotencyKey.current ?? crypto.randomUUID()
     idempotencyKey.current = key
     void checkout.start({
       order_id: config.orderId,
       idempotency_key: key,
-      method: method === 'mobile_money'
-        ? { type: 'mobile_money', phone: phone ?? '' }
+      method: input.method === 'mobile_money'
+        ? { type: 'mobile_money', network: input.network, phone: input.phone }
         : { type: 'card' },
     })
   }
@@ -138,6 +143,8 @@ export function App() {
               defaultPhone={config.defaultPhone}
               savedPhones={config.savedPhones}
               methods={config.methods}
+              networks={config.networks}
+              defaultNetwork={config.defaultNetwork}
               supportLabel={config.supportLabel}
               supportHref={config.supportHref}
               onClose={embedded ? close : undefined}
