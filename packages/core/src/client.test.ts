@@ -39,7 +39,7 @@ describe('MitumbaPay client', () => {
     const res = await pay.initiateCheckout({
       order_id: 'ord_1',
       idempotency_key: 'idem_1',
-      method: { type: 'mobile_money', phone: '+254712345678' },
+      method: { type: 'mobile_money', network: 'mpesa', phone: '+254712345678' },
     })
     expect(res.next_action.type).toBe('await_confirmation')
 
@@ -47,6 +47,7 @@ describe('MitumbaPay client', () => {
     const [url, init] = call
     expect(url).toBe('https://api.mitumba.africa/pay/checkout/initiate')
     expect((init.headers as Headers).get('Authorization')).toBe('Bearer tok_123')
+    expect(JSON.parse(String(init.body)).method).toEqual({ type: 'mobile_money', network: 'mpesa', phone: '+254712345678' })
   })
 
   it('rejects invalid input before hitting the network', async () => {
@@ -56,7 +57,7 @@ describe('MitumbaPay client', () => {
       pay.initiateCheckout({
         order_id: 'ord_1',
         idempotency_key: 'idem_1',
-        method: { type: 'mobile_money', phone: '0712345678' },
+        method: { type: 'mobile_money', network: 'mpesa', phone: '0712345678' },
       }),
     ).rejects.toThrow()
     expect(fetchImpl).not.toHaveBeenCalled()
