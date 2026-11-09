@@ -48,6 +48,15 @@ const final = await pay.pollCheckoutStatus('ord_123', {
 > pending deployment in some environments — verify before production use.
 > `getCheckoutStatus` is live.
 
+## Market-driven helpers
+
+- `normalizePhone(input, { callingCode, nationalLength?, example? })` turns what a person typed into E.164 for the market, or null. `isValidPhone` and `nationalPart` sit beside it.
+- `formatMoney(money, locale?)` and `currencyDigits(currency)` format `Money` by the currency's own minor unit.
+
+## Errors
+
+`PayError` carries `status`, `code` and, on 503 or 429, `retryAfterMs` from `Retry-After`. `isUnavailable` is true on 503 (`payment_initiation_paused`, `payment_provider_unavailable`): nothing was charged, so retry later. A GET never waits less than the server asked, and a 503 that names a long wait is surfaced at once.
+
 ## License
 
 MIT
