@@ -2,18 +2,29 @@ import { z } from 'zod'
 import { providerIdSchema, type ProviderId } from './provider'
 import { PAY_CONTRACT_VERSION } from './version'
 
-/** Kenyan MSISDN, E.164 with the +254 country code. */
+/**
+ * Generic E.164: a leading '+' and 1-15 digits. No contract locks a phone to one country; the
+ * backend validates the number against the order's or session's market (ADR-010).
+ */
+export const E164_PHONE = /^\+[1-9]\d{1,14}$/
+
+/**
+ * Kenyan MSISDN, E.164 with the +254 country code.
+ * @deprecated Kenya is one configured market, not the contract. Validate with {@link E164_PHONE}
+ * and let the backend check the number against the market. Kept so existing imports compile.
+ */
 export const KENYAN_MSISDN = /^\+254\d{9}$/
 
 /**
  * The buyer-selected payment *method*. The client picks a method; the backend
  * picks the provider. `card` carries no fields — the backend obtains buyer
  * identity (e.g. email) itself; clients never submit provider credentials.
+ * A mobile-money phone is E.164 in the order's market.
  */
 export type CheckoutPaymentMethod = { type: 'mobile_money'; phone: string } | { type: 'card' }
 
 export const checkoutPaymentMethodSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('mobile_money'), phone: z.string().regex(KENYAN_MSISDN) }),
+  z.object({ type: z.literal('mobile_money'), phone: z.string().regex(E164_PHONE) }),
   z.object({ type: z.literal('card') }),
 ])
 

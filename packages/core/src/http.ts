@@ -1,5 +1,5 @@
 import type { PayErrorBody } from '@mitumba/pay-contract'
-import { PayError } from './errors'
+import { PayError, parseRetryAfter } from './errors'
 import { DEFAULT_BASE_URL, type MitumbaPayConfig, type RequestOptions } from './config'
 
 const RETRYABLE_METHODS = new Set(['GET'])
@@ -84,7 +84,11 @@ export class HttpClient {
       }
 
       if (response.status >= 500 && canRetry && attempt < this.maxRetries) {
-        await backoff(++attempt)
+        // A 503 that names a wait longer than the backoff ceiling (payments paused, provider down)
+        // is not worth blocking the caller for: surface it now so the UI can say so.
+        const retryAfterMs = parseRetryAfter(response.headers.get('Retry-After'))
+        if (response.status === 503 && retryAfterMs !== null && retryAfterMs > MAX_INLINE_RETRY_MS) break
+        await backoff(++attempt, retryAfterMs)
         continue
       }
       break
@@ -97,7 +101,9 @@ export class HttpClient {
       } catch {
         errBody = { error: 'unknown_error', message: response.statusText }
       }
-      throw new PayError(response.status, errBody)
+      throw new PayError(response.status, errBody, {
+        retryAfterMs: parseRetryAfter(response.headers.get('Retry-After')),
+      })
     }
 
     if (response.status === 204) return undefined as T
@@ -105,8 +111,13 @@ export class HttpClient {
   }
 }
 
-function backoff(attempt: number): Promise<void> {
-  const ms = Math.min(2 ** attempt * 100, 2000)
+/** The longest server-requested wait the client will sit through inside one request. */
+const MAX_INLINE_RETRY_MS = 2000
+
+function backoff(attempt: number, retryAfterMs: number | null = null): Promise<void> {
+  const exponential = Math.min(2 ** attempt * 100, MAX_INLINE_RETRY_MS)
+  // Never retry sooner than the server asked.
+  const ms = retryAfterMs === null ? exponential : Math.max(exponential, Math.min(retryAfterMs, MAX_INLINE_RETRY_MS))
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 

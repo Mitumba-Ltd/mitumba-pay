@@ -11,9 +11,14 @@ import {
 } from 'react-native'
 import { payTheme as t } from './theme'
 import { type UseCheckoutResult, type CheckoutPhase } from './useCheckout'
+import { isValidPhone, nationalPart, normalizePhone, type PhoneFormat } from '@mitumba/pay'
+import { unavailableMessage } from './unavailable'
 
 export type NativePaymentMethod = 'mobile_money' | 'card'
 export interface NativeLineItem { label: string; value: string }
+
+/** Any E.164 number; used only when the host supplies no market phone format. */
+const E164 = /^\+[1-9]\d{4,14}$/
 
 const PHASE_MESSAGE: Record<CheckoutPhase, string> = {
   idle: '',
@@ -25,6 +30,7 @@ const PHASE_MESSAGE: Record<CheckoutPhase, string> = {
   failed: 'That payment didn’t go through.',
   retryable: 'Payment wasn’t completed. You can safely try again.',
   timeout: 'Still confirming. Keep this sheet open or check your order shortly.',
+  unavailable: unavailableMessage(null),
   error: 'We couldn’t start the payment.',
 }
 
@@ -38,7 +44,14 @@ export interface MitumbaPaySheetProps {
   orderId?: string
   lineItems?: NativeLineItem[]
   methods?: NativePaymentMethod[]
+  /** An E.164 number to prefill, e.g. the buyer's saved number. */
   defaultPhone?: string
+  /**
+   * The market's phone rules (calling code, lengths, example), from the host's market. With it, the
+   * input shows the calling code as a fixed prefix and accepts local forms such as `0712 345 678`.
+   * Without it, only a full international number is accepted.
+   */
+  phoneFormat?: PhoneFormat
 }
 
 /**
@@ -57,6 +70,7 @@ export function MitumbaPaySheet({
   lineItems = [],
   methods = ['mobile_money', 'card'],
   defaultPhone = '',
+  phoneFormat,
 }: MitumbaPaySheetProps) {
   const [method, setMethod] = useState<NativePaymentMethod>(methods[0] ?? 'mobile_money')
   const [phone, setPhone] = useState(defaultPhone)
@@ -65,9 +79,18 @@ export function MitumbaPaySheet({
   useEffect(() => setPhone(defaultPhone), [defaultPhone])
   const busy = phase === 'initiating' || phase === 'polling' || phase === 'redirecting' || phase === 'awaiting_confirmation'
   const done = phase === 'paid'
-  const failed = phase === 'failed' || phase === 'retryable' || phase === 'error'
-  const message = phase === 'error' && error ? error.message : PHASE_MESSAGE[phase]
-  const validPhone = /^\+254\d{9}$/.test(phone)
+  const failed = phase === 'failed' || phase === 'retryable' || phase === 'error' || phase === 'unavailable'
+  const message =
+    phase === 'unavailable'
+      ? unavailableMessage(error?.retryAfterMs)
+      : phase === 'error' && error
+        ? error.message
+        : PHASE_MESSAGE[phase]
+  // The number to send: E.164 in the market, or null while it is not a valid number.
+  const payablePhone = phoneFormat ? normalizePhone(phone, phoneFormat) : E164.test(phone.trim()) ? phone.trim() : null
+  const validPhone = phoneFormat ? isValidPhone(phone, phoneFormat) : payablePhone !== null
+  const shownPhone = phoneFormat ? nationalPart(phone, phoneFormat) : phone
+  const placeholder = phoneFormat?.example ? nationalPart(phoneFormat.example, phoneFormat) : '+'
   const disabled = busy || done || (method === 'mobile_money' && !validPhone)
 
   return (
@@ -129,11 +152,11 @@ export function MitumbaPaySheet({
                   <View style={styles.fieldGroup}>
                     <Text style={styles.fieldLabel}>Mobile number</Text>
                     <View style={[styles.inputWrap, phone.length > 0 && !validPhone ? styles.inputError : null]}>
-                      <Text style={styles.country}>KE +254</Text>
+                      {phoneFormat ? <Text style={styles.country}>{phoneFormat.callingCode}</Text> : null}
                       <TextInput
-                        value={displayPhone(phone)}
-                        onChangeText={(value) => setPhone(normalizePhone(value))}
-                        placeholder="7XX XXX XXX"
+                        value={shownPhone}
+                        onChangeText={setPhone}
+                        placeholder={placeholder}
                         placeholderTextColor={t.color.faint}
                         keyboardType="phone-pad"
                         autoComplete="tel"
@@ -142,7 +165,7 @@ export function MitumbaPaySheet({
                       />
                       {validPhone ? <Text style={styles.valid}>✓</Text> : null}
                     </View>
-                    <Text style={[styles.help, phone.length > 0 && !validPhone ? styles.helpError : null]}>{phone.length > 0 && !validPhone ? 'Enter a valid Kenyan mobile number' : 'A secure prompt will appear on your phone.'}</Text>
+                    <Text style={[styles.help, phone.length > 0 && !validPhone ? styles.helpError : null]}>{phone.length > 0 && !validPhone ? 'Enter a valid mobile number' : 'A secure prompt will appear on your phone.'}</Text>
                   </View>
                 ) : (
                   <View style={styles.cardNote}><Text style={styles.cardNoteIcon}>▤</Text><Text style={styles.cardNoteText}>You’ll continue to a secure, PCI-compliant card page. Mitumba never stores your card number.</Text></View>
@@ -154,7 +177,7 @@ export function MitumbaPaySheet({
                   accessibilityRole="button"
                   accessibilityState={{ busy, disabled }}
                   disabled={disabled}
-                  onPress={() => onPay(method === 'mobile_money' ? { method, phone } : { method })}
+                  onPress={() => onPay(method === 'mobile_money' ? { method, phone: payablePhone ?? phone } : { method })}
                   style={[styles.payButton, disabled ? styles.payButtonDisabled : null]}
                 >
                   <Text style={styles.payButtonText}>{failed ? 'Try again' : `Pay ${amountLabel}`}</Text>
@@ -172,17 +195,6 @@ export function MitumbaPaySheet({
 
 function Outcome({ icon, message, success, loading }: { icon: string; message: string; success?: boolean; loading?: boolean }) {
   return <View style={styles.outcome} accessibilityLiveRegion="polite"><View style={[styles.outcomeIcon, success ? styles.outcomeSuccess : null]}>{loading ? <ActivityIndicator color={t.color.green} /> : <Text style={[styles.outcomeIconText, success ? styles.outcomeSuccessText : null]}>{icon}</Text>}</View><Text style={styles.outcomeMessage}>{message}</Text></View>
-}
-
-function normalizePhone(value: string): string {
-  const digits = value.replace(/\D/g, '')
-  if (digits.startsWith('254')) return `+${digits.slice(0, 12)}`
-  if (digits.startsWith('0')) return `+254${digits.slice(1, 10)}`
-  return `+254${digits.slice(0, 9)}`
-}
-
-function displayPhone(value: string): string {
-  return value.startsWith('+254') ? value.slice(4) : value
 }
 
 const styles = StyleSheet.create({

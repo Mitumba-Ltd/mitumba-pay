@@ -23,6 +23,8 @@ function Checkout({ visible, orderId, token, onClose }) {
       amountLabel="KES 6,000.00"
       orderId={orderId}
       lineItems={[{ label: 'Delivery', value: 'KES 150.00' }]}
+      // The market's phone rules, from your market registry (never hardcode a country).
+      phoneFormat={{ callingCode: market.phone.calling_code, nationalLength: market.phone.national_length, example: market.phone.example }}
       defaultPhone="+254712345678"
       onClose={onClose}
       onPay={({ method = 'mobile_money', phone } = {}) => checkout.start({
@@ -44,6 +46,15 @@ function Checkout({ visible, orderId, token, onClose }) {
 - Large method cards select a method only, never a provider.
 - Dedicated STK waiting, success, error, and retry states.
 - Card checkout explains the secure redirect; raw card details never enter this package.
+
+## Country-aware by the host's market
+
+- **Phones:** pass `phoneFormat` (calling code, national lengths, example) from your market. The input then accepts local forms such as `0712 345 678` and sends E.164. Without it, only a full international number is accepted; nothing assumes Kenya.
+- **Money:** `formatMoney(money, locale)` divides by the currency's own minor unit (KES 2, UGX 0), using the host market's locale.
+
+## Payments temporarily unavailable
+
+A 503 (payments paused by the platform, or the provider for the method unreachable) puts the hook in the `unavailable` phase, not `error`. `error.retryAfterMs` carries the server's `Retry-After`, and `unavailableMessage(ms)` gives the standard copy ("…Nothing was charged. Please try again in about 15 minutes."). Offer a retry; never show it as a failed payment.
 
 ## License
 

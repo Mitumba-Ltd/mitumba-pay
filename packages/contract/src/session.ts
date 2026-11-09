@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { PAY_CONTRACT_VERSION } from './version'
 import { moneySchema, type Money } from './money'
 import { paymentMethodTypeSchema, type PaymentMethodType } from './market'
-import { type CheckoutNextAction, checkoutNextActionSchema } from './checkout'
+import { type CheckoutNextAction, checkoutNextActionSchema, E164_PHONE } from './checkout'
 
 /**
  * Checkout sessions (RFC 0001 ยง6-8). A session is the long-term public
@@ -171,13 +171,9 @@ export const checkoutSessionContextSchema = z.object({
 // Attempt initiation
 // ---------------------------------------------------------------------------
 
-/**
- * Generic E.164: a leading '+' and 1-15 digits. The public session contract
- * does NOT lock phones to a single country — the backend validates the number
- * against the session's market. (The legacy order-based contract keeps its
- * Kenya-only `KENYAN_MSISDN`.)
- */
-export const E164_PHONE = /^\+[1-9]\d{1,14}$/
+// `E164_PHONE` lives in ./checkout and is shared by the order-based and session contracts: neither
+// locks a phone to one country; the backend validates the number against the order's or session's
+// market (ADR-010).
 
 /**
  * Buyer-selected method for a session attempt. The client picks a method type

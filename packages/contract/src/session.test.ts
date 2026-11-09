@@ -6,8 +6,8 @@ import {
   createAttemptInputSchema,
   sessionPaymentMethodSchema,
   checkoutSessionStatusResponseSchema,
-  E164_PHONE,
 } from './session'
+import { E164_PHONE } from './checkout'
 import { PAY_CONTRACT_VERSION } from './version'
 
 describe('checkout session creation', () => {

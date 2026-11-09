@@ -28,6 +28,7 @@ export type {
   WidgetSavedPhone,
 } from './components'
 export { payTheme } from './theme'
+export { unavailableMessage } from './unavailable'
 export type { PayTheme } from './theme'
 
 // Hosted-checkout bridge v2 protocol (RFC 0001).
@@ -49,7 +50,15 @@ export { openMitumbaPay, DEFAULT_HOSTED_WIDGET_URL } from './launcher'
 export type { OpenMitumbaPayOptions, MitumbaPayResult, MitumbaPayOutcome } from './launcher'
 
 // Convenience re-exports so widget consumers need a single import.
-export { MitumbaPay, PayError } from '@mitumba/pay'
+export {
+  MitumbaPay,
+  PayError,
+  currencyDigits,
+  formatMoney,
+  isValidPhone,
+  nationalPart,
+  normalizePhone,
+} from '@mitumba/pay'
 export type {
   MitumbaPayConfig,
   InitiateCheckoutInput,
@@ -60,4 +69,5 @@ export type {
   CheckoutMethodDescriptor,
   SessionPaymentMethod,
   Money,
+  PhoneFormat,
 } from '@mitumba/pay'

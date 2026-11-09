@@ -6,7 +6,11 @@
  */
 export { MitumbaPay } from './client'
 export { HttpClient } from './http'
-export { PayError } from './errors'
+export { PayError, parseRetryAfter } from './errors'
+export type { PayErrorOptions } from './errors'
+export { isValidPhone, nationalPart, normalizePhone } from './phone'
+export type { PhoneFormat } from './phone'
+export { currencyDigits, formatMoney } from './money'
 export { DEFAULT_BASE_URL } from './config'
 export type { MitumbaPayConfig, RequestOptions } from './config'
 export { pollCheckoutStatus, pollStatus } from './polling'

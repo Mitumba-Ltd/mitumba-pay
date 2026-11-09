@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { providerIdSchema, type ProviderId } from './provider'
 import { checkoutOrderSchema, type CheckoutOrder } from './order'
+import { moneySchema, type Money } from './money'
 import { PAY_CONTRACT_VERSION } from './version'
 
 /** Per-attempt payment state. Only `initiated` is non-terminal. */
@@ -28,11 +29,7 @@ export interface CheckoutStatusResponse {
   terminal: boolean
   /** When true, stop automatic polling and offer another attempt. */
   retryable: boolean
-  amount: {
-    currency: 'KES'
-    /** Integer minor units. KES 1,250.00 === 125000. */
-    minor_units: number
-  }
+  amount: Money
   latest_attempt: {
     id: string
     sequence: number
@@ -58,10 +55,7 @@ export const checkoutStatusResponseSchema = z.object({
   checkout_status: checkoutStatusSchema,
   terminal: z.boolean(),
   retryable: z.boolean(),
-  amount: z.object({
-    currency: z.literal('KES'),
-    minor_units: z.number().int(),
-  }),
+  amount: moneySchema,
   latest_attempt: z
     .object({
       id: z.string(),

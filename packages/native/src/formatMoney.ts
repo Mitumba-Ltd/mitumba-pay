@@ -1,26 +1,6 @@
-import type { Money } from '@mitumba/pay'
-
 /**
- * Format a provider-neutral {@link Money} for display. Uses Intl when a locale
- * is available, falling back to a plain `CODE 1,234.56` rendering. The number
- * of decimal places is derived from `minorUnitDigits` (default 2) so a
- * zero-decimal currency renders without a fractional part.
- *
- * Amounts and currency come from the authoritative session context; this never
- * invents or converts a value.
+ * Format a provider-neutral Money for display. The shared implementation in @mitumba/pay divides by
+ * the currency's own minor unit (KES 2, UGX 0), so a zero-decimal currency is never shown a hundred
+ * times too small. Kept as this package's export so existing imports keep working.
  */
-export function formatMoney(money: Money, locale?: string, minorUnitDigits = 2): string {
-  const major = money.minor_units / 10 ** minorUnitDigits
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: money.currency,
-      minimumFractionDigits: minorUnitDigits,
-      maximumFractionDigits: minorUnitDigits,
-    }).format(major)
-  } catch {
-    const fixed = major.toFixed(minorUnitDigits)
-    const withGroups = fixed.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-    return `${money.currency} ${withGroups}`
-  }
-}
+export { formatMoney } from '@mitumba/pay'

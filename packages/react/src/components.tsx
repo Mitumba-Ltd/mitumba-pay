@@ -1,6 +1,11 @@
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react'
 import { payTheme as t } from './theme'
 import { type UseCheckoutResult, type CheckoutPhase } from './useCheckout'
+import { normalizePhone, type PhoneFormat } from '@mitumba/pay'
+import { unavailableMessage } from './unavailable'
+
+/** Any E.164 number; used only when the host supplies no market phone format. */
+const E164 = /^\+[1-9]\d{4,14}$/
 
 export interface MitumbaPayButtonProps {
   onClick?: () => void
@@ -42,8 +47,15 @@ export interface MitumbaPayWidgetProps {
   logoUrl?: string
   onPay: (input: { method: WidgetMethod; phone?: string }) => void
   methods?: WidgetMethod[]
+  /** An E.164 number to prefill, e.g. the buyer's saved number. */
   defaultPhone?: string
   savedPhones?: WidgetSavedPhone[]
+  /**
+   * The market's phone rules (calling code, lengths, example), from the host's market. With it, the
+   * input accepts local forms such as `0712 345 678` and sends E.164. Without it, only a full
+   * international number is accepted.
+   */
+  phoneFormat?: PhoneFormat
   supportLabel?: string
   supportHref?: string
   onClose?: () => void
@@ -61,6 +73,7 @@ const PHASE_MESSAGE: Record<CheckoutPhase, string> = {
   failed: 'That payment didn’t go through.',
   retryable: 'Payment wasn’t completed. You can safely try again.',
   timeout: 'Still confirming. Keep this window open or check your order shortly.',
+  unavailable: unavailableMessage(null),
   error: 'We couldn’t start the payment.',
 }
 
@@ -79,6 +92,7 @@ export function MitumbaPayWidget({
   methods = ['mobile_money', 'card'],
   defaultPhone = '',
   savedPhones = [],
+  phoneFormat,
   supportLabel = 'We’re here if you need help',
   supportHref,
   onClose,
@@ -97,10 +111,18 @@ export function MitumbaPayWidget({
 
   const busy = phase === 'initiating' || phase === 'polling' || phase === 'redirecting' || phase === 'awaiting_confirmation'
   const done = phase === 'paid'
-  const failed = phase === 'failed' || phase === 'retryable' || phase === 'error'
-  const phoneValid = /^\+254\d{9}$/.test(phone)
+  const failed = phase === 'failed' || phase === 'retryable' || phase === 'error' || phase === 'unavailable'
+  // The number to send: E.164 in the market, or null while it is not a valid number.
+  const payablePhone = phoneFormat ? normalizePhone(phone, phoneFormat) : E164.test(phone.trim()) ? phone.trim() : null
+  const phoneValid = payablePhone !== null
   const canPay = !busy && !done && (method === 'card' || phoneValid)
-  const message = phase === 'error' && error ? error.message : PHASE_MESSAGE[phase]
+  const message =
+    phase === 'unavailable'
+      ? unavailableMessage(error?.retryAfterMs)
+      : phase === 'error' && error
+        ? error.message
+        : PHASE_MESSAGE[phase]
+  const placeholder = phoneFormat?.example ?? '+'
   const shownTotal = totalLabel ?? amountLabel
 
   return (
@@ -199,7 +221,7 @@ export function MitumbaPayWidget({
                       <span className="mpay-field-caption">Saved numbers</span>
                       <div className="mpay-chips">
                         {savedPhones.map((saved) => (
-                          <button key={saved.value} type="button" className={`mpay-chip${saved.value === phone ? ' is-selected' : ''}`} onClick={() => setPhone(saved.value)}>
+                          <button key={saved.value} type="button" className={`mpay-chip${saved.value === payablePhone ? ' is-selected' : ''}`} onClick={() => setPhone(saved.value)}>
                             {saved.label}
                           </button>
                         ))}
@@ -210,10 +232,10 @@ export function MitumbaPayWidget({
                     <span>Mobile number</span>
                     <div className={`mpay-input-wrap${phone && !phoneValid ? ' has-error' : ''}`}>
                       <PhoneIcon />
-                      <input id={inputId} inputMode="tel" autoComplete="tel" placeholder="+254 7XX XXX XXX" value={phone} onChange={(event) => setPhone(normalizePhone(event.target.value))} />
+                      <input id={inputId} inputMode="tel" autoComplete="tel" placeholder={placeholder} value={phone} onChange={(event) => setPhone(event.target.value)} />
                       {phoneValid ? <span className="mpay-valid" aria-label="Valid number">✓</span> : null}
                     </div>
-                    <small>{phone && !phoneValid ? 'Use the format +2547XXXXXXXX' : 'A secure payment prompt will appear on your phone.'}</small>
+                    <small>{phone && !phoneValid ? `Enter a valid mobile number${phoneFormat?.example ? `, for example ${phoneFormat.example}` : ''}` : 'A secure payment prompt will appear on your phone.'}</small>
                   </label>
                 </div>
               ) : (
@@ -229,7 +251,7 @@ export function MitumbaPayWidget({
         </div>
 
         {!done && !busy ? (
-          <MitumbaPayButton onClick={() => onPay(method === 'mobile_money' ? { method, phone } : { method })} disabled={!canPay}>
+          <MitumbaPayButton onClick={() => onPay(method === 'mobile_money' ? { method, phone: payablePhone ?? phone } : { method })} disabled={!canPay}>
             {failed ? 'Try again' : `Pay ${amountLabel}`}
           </MitumbaPayButton>
         ) : null}
@@ -238,13 +260,6 @@ export function MitumbaPayWidget({
       </div>
     </section>
   )
-}
-
-function normalizePhone(value: string): string {
-  const trimmed = value.replace(/[\s()-]/g, '')
-  if (trimmed.startsWith('07') && trimmed.length <= 10) return `+254${trimmed.slice(1)}`
-  if (trimmed.startsWith('254')) return `+${trimmed}`
-  return trimmed
 }
 
 function SummaryRow({ label, value, strong }: WidgetLineItem & { strong?: boolean }) {
