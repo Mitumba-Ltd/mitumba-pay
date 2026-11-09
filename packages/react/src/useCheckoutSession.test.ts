@@ -87,7 +87,7 @@ describe('useCheckoutSession', () => {
       useCheckoutSession({ fetch: fetchImpl }, 'cs_1', 'csec_1'),
     )
     await act(async () => {
-      await result.current.pay({ type: 'mobile_money', phone: '+254712345678' }, 'intent_1')
+      await result.current.pay({ type: 'mobile_money', network: 'mpesa', phone: '+254712345678' }, 'intent_1')
     })
     await waitFor(() => expect(result.current.phase).toBe('paid'))
     expect(result.current.status?.checkout_status).toBe('paid')

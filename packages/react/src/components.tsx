@@ -7,6 +7,20 @@ import { unavailableMessage } from './unavailable'
 /** Any E.164 number; used only when the host supplies no market phone format. */
 const E164 = /^\+[1-9]\d{4,14}$/
 
+/** A stable empty default, so effects keyed on `networks` do not rerun every render. */
+const NO_NETWORKS: WidgetNetwork[] = []
+
+/** Whether `id` is an offered network that can take a payment now. */
+function isPayable(networks: readonly WidgetNetwork[], id: string | null): boolean {
+  return networks.some((item) => item.id === id && item.available !== false)
+}
+
+/** The preferred network when it can take a payment, else the first that can, else none. */
+function initialNetwork(networks: readonly WidgetNetwork[], preferred: string | undefined): string | null {
+  if (preferred !== undefined && isPayable(networks, preferred)) return preferred
+  return networks.find((item) => item.available !== false)?.id ?? null
+}
+
 export interface MitumbaPayButtonProps {
   onClick?: () => void
   disabled?: boolean
@@ -34,7 +48,18 @@ export type WidgetMethod = 'mobile_money' | 'card'
 
 export interface WidgetLineItem { label: string; value: string }
 export interface WidgetMetadataItem { label: string; value: string }
-export interface WidgetSavedPhone { label: string; value: string }
+/** A saved number. `network` is the wallet it is saved on (see `savedPhoneChoices`); picking it selects that network. */
+export interface WidgetSavedPhone { label: string; value: string; network?: string }
+/**
+ * A mobile-money network the buyer can pay from, e.g. a market's `mobile_money_networks`. Set
+ * `available: false` to show it as temporarily unavailable rather than hiding it.
+ */
+export interface WidgetNetwork { id: string; name: string; available?: boolean }
+
+/** What the widget submits. Mobile money always names its network; send it as the method's `network`. */
+export type WidgetPayInput =
+  | { method: 'mobile_money'; network: string; phone: string }
+  | { method: 'card' }
 
 export interface MitumbaPayWidgetProps {
   checkout: UseCheckoutResult
@@ -45,8 +70,16 @@ export interface MitumbaPayWidgetProps {
   metadata?: WidgetMetadataItem[]
   merchantName?: string
   logoUrl?: string
-  onPay: (input: { method: WidgetMethod; phone?: string }) => void
+  onPay: (input: WidgetPayInput) => void
   methods?: WidgetMethod[]
+  /**
+   * The mobile-money networks offered here, in display order, e.g. the market's
+   * `mobile_money_networks`. The buyer picks one before entering their number, because the payment
+   * prompt goes to that network only. With none, mobile money cannot be paid.
+   */
+  networks?: WidgetNetwork[]
+  /** The network to preselect, e.g. the buyer's default saved number's. Defaults to the first available. */
+  defaultNetwork?: string
   /** An E.164 number to prefill, e.g. the buyer's saved number. */
   defaultPhone?: string
   savedPhones?: WidgetSavedPhone[]
@@ -90,6 +123,8 @@ export function MitumbaPayWidget({
   logoUrl,
   onPay,
   methods = ['mobile_money', 'card'],
+  networks = NO_NETWORKS,
+  defaultNetwork,
   defaultPhone = '',
   savedPhones = [],
   phoneFormat,
@@ -101,6 +136,7 @@ export function MitumbaPayWidget({
 }: MitumbaPayWidgetProps) {
   const inputId = useId()
   const [method, setMethod] = useState<WidgetMethod>(methods[0] ?? 'mobile_money')
+  const [network, setNetwork] = useState<string | null>(() => initialNetwork(networks, defaultNetwork))
   const [phone, setPhone] = useState(defaultPhone)
   const { phase, error } = checkout
 
@@ -108,6 +144,10 @@ export function MitumbaPayWidget({
   useEffect(() => {
     if (!methods.includes(method)) setMethod(methods[0] ?? 'mobile_money')
   }, [method, methods])
+  // Keep the choice on a network that is still offered and available; otherwise fall back.
+  useEffect(() => {
+    if (!isPayable(networks, network)) setNetwork(initialNetwork(networks, defaultNetwork))
+  }, [networks, network, defaultNetwork])
 
   const busy = phase === 'initiating' || phase === 'polling' || phase === 'redirecting' || phase === 'awaiting_confirmation'
   const done = phase === 'paid'
@@ -115,7 +155,8 @@ export function MitumbaPayWidget({
   // The number to send: E.164 in the market, or null while it is not a valid number.
   const payablePhone = phoneFormat ? normalizePhone(phone, phoneFormat) : E164.test(phone.trim()) ? phone.trim() : null
   const phoneValid = payablePhone !== null
-  const canPay = !busy && !done && (method === 'card' || phoneValid)
+  const selectedNetwork = networks.find((item) => item.id === network && item.available !== false) ?? null
+  const canPay = !busy && !done && (method === 'card' || (phoneValid && selectedNetwork !== null))
   const message =
     phase === 'unavailable'
       ? unavailableMessage(error?.retryAfterMs)
@@ -215,29 +256,75 @@ export function MitumbaPayWidget({
           ) : (
             <>
               {method === 'mobile_money' ? (
+                networks.length === 0 ? (
+                  <div className="mpay-note" role="note">Mobile money isn’t available for this payment. Please choose another method.</div>
+                ) : (
                 <div className="mpay-field-group">
+                  <div role="radiogroup" aria-label="Mobile money network">
+                    <span className="mpay-field-caption">Pay from</span>
+                    <div className="mpay-chips">
+                      {networks.map((item) => {
+                        const unavailable = item.available === false
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={item.id === network}
+                            disabled={unavailable}
+                            className={`mpay-chip${item.id === network ? ' is-selected' : ''}`}
+                            onClick={() => setNetwork(item.id)}
+                          >
+                            {item.name}
+                            {unavailable ? <small> · Temporarily unavailable</small> : null}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                   {savedPhones.length > 0 ? (
                     <div className="mpay-saved" aria-label="Saved mobile numbers">
                       <span className="mpay-field-caption">Saved numbers</span>
                       <div className="mpay-chips">
-                        {savedPhones.map((saved) => (
-                          <button key={saved.value} type="button" className={`mpay-chip${saved.value === payablePhone ? ' is-selected' : ''}`} onClick={() => setPhone(saved.value)}>
-                            {saved.label}
-                          </button>
-                        ))}
+                        {savedPhones.map((saved) => {
+                          const savedNetwork = saved.network ?? network
+                          const unavailable = !isPayable(networks, savedNetwork)
+                          const selected = saved.value === payablePhone && savedNetwork === network
+                          return (
+                            <button
+                              key={`${saved.network ?? ''}:${saved.value}`}
+                              type="button"
+                              disabled={unavailable}
+                              className={`mpay-chip${selected ? ' is-selected' : ''}`}
+                              onClick={() => {
+                                setPhone(saved.value)
+                                if (saved.network) setNetwork(saved.network)
+                              }}
+                            >
+                              {saved.label}
+                            </button>
+                          )
+                        })}
                       </div>
                     </div>
                   ) : null}
                   <label className="mpay-field" htmlFor={inputId}>
-                    <span>Mobile number</span>
+                    <span>{selectedNetwork ? `${selectedNetwork.name} number` : 'Mobile number'}</span>
                     <div className={`mpay-input-wrap${phone && !phoneValid ? ' has-error' : ''}`}>
                       <PhoneIcon />
                       <input id={inputId} inputMode="tel" autoComplete="tel" placeholder={placeholder} value={phone} onChange={(event) => setPhone(event.target.value)} />
                       {phoneValid ? <span className="mpay-valid" aria-label="Valid number">✓</span> : null}
                     </div>
-                    <small>{phone && !phoneValid ? `Enter a valid mobile number${phoneFormat?.example ? `, for example ${phoneFormat.example}` : ''}` : 'A secure payment prompt will appear on your phone.'}</small>
+                    <small>
+                      {phone && !phoneValid
+                        ? `Enter a valid mobile number${phoneFormat?.example ? `, for example ${phoneFormat.example}` : ''}`
+                        : selectedNetwork
+                          ? `A secure ${selectedNetwork.name} prompt will appear on this phone.`
+                          : 'Choose the network your number pays from.'}
+                    </small>
                   </label>
                 </div>
+                )
               ) : (
                 <div className="mpay-card-redirect">
                   <span className="mpay-card-icon"><CardIcon /></span>
@@ -251,7 +338,13 @@ export function MitumbaPayWidget({
         </div>
 
         {!done && !busy ? (
-          <MitumbaPayButton onClick={() => onPay(method === 'mobile_money' ? { method, phone: payablePhone ?? phone } : { method })} disabled={!canPay}>
+          <MitumbaPayButton
+            onClick={() => {
+              if (method === 'card') onPay({ method })
+              else if (selectedNetwork && payablePhone) onPay({ method, network: selectedNetwork.id, phone: payablePhone })
+            }}
+            disabled={!canPay}
+          >
             {failed ? 'Try again' : `Pay ${amountLabel}`}
           </MitumbaPayButton>
         ) : null}
@@ -287,7 +380,7 @@ const WIDGET_CSS = `
 .mpay-checkout{display:grid;grid-template-columns:minmax(260px,38%) minmax(360px,1fr);width:min(900px,100%);min-height:570px;border-radius:24px;overflow:hidden;background:var(--mpay-surface);box-shadow:0 32px 90px rgba(18,39,25,.24);isolation:isolate;color:var(--mpay-ink)}
 .mpay-checkout *{box-sizing:border-box}.mpay-checkout button,.mpay-checkout input{font:inherit}.mpay-summary{position:relative;overflow:hidden;background:linear-gradient(145deg,var(--mpay-green) 0%,#35a65c 100%);color:#fff}.mpay-weave{position:absolute;inset:0;opacity:.12;background-image:linear-gradient(30deg,transparent 12%,rgba(255,255,255,.4) 12.5%,transparent 13%),linear-gradient(150deg,transparent 12%,rgba(255,255,255,.28) 12.5%,transparent 13%);background-size:72px 120px;transform:scale(1.2)}
 .mpay-summary-content{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100%;padding:40px 36px}.mpay-brand-row{display:flex;align-items:center;gap:10px;min-height:42px;font-weight:700;font-size:15px;letter-spacing:.01em}.mpay-brand-logo{display:block;width:138px;max-height:58px;object-fit:contain;object-position:left center;filter:drop-shadow(0 4px 12px rgba(20,44,28,.14))}.mpay-brand-mark{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22);font-size:14px}.mpay-amount-block{display:flex;flex-direction:column;gap:6px;margin-top:62px}.mpay-eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:rgba(255,255,255,.68)}.mpay-amount{font-size:34px;line-height:1.15;font-weight:560;letter-spacing:-.04em}.mpay-lines{display:flex;flex-direction:column;gap:11px;margin-top:32px}.mpay-line{display:flex;align-items:center;gap:10px;font-size:13px;color:rgba(255,255,255,.78)}.mpay-line i{flex:1;border-bottom:1px dotted rgba(255,255,255,.38);transform:translateY(-2px)}.mpay-line b{font-weight:560;color:#fff}.mpay-line.is-strong{font-size:14px;color:#fff}.mpay-line.is-strong span,.mpay-line.is-strong b{font-weight:750}.mpay-summary-rule{height:1px;background:rgba(255,255,255,.22);margin:8px 0}.mpay-meta{display:grid;gap:22px;margin-top:36px}.mpay-meta-row{display:flex;align-items:flex-start;gap:12px}.mpay-meta-icon{display:flex;color:rgba(255,255,255,.84)}.mpay-meta-row div{display:flex;flex-direction:column;gap:3px;min-width:0}.mpay-meta-row div span{font-size:11px;color:rgba(255,255,255,.62);text-transform:uppercase;letter-spacing:.08em}.mpay-meta-row strong{font-size:14px;font-weight:600;overflow-wrap:anywhere}.mpay-support{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:auto;padding-top:32px}.mpay-support>div{display:flex;flex-direction:column;gap:3px}.mpay-support strong{font-size:12px}.mpay-support span{font-size:12px;color:rgba(255,255,255,.7)}.mpay-support-button{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;text-decoration:none;transition:background .18s ease}.mpay-support-button:hover{background:rgba(255,255,255,.22)}
-.mpay-action{display:flex;flex-direction:column;padding:42px 44px 32px;background:rgba(255,255,255,.98)}.mpay-action-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.mpay-action-header h2{margin:0;font-size:27px;line-height:1.2;font-weight:540;letter-spacing:-.035em}.mpay-action-header>svg{color:var(--mpay-green);width:18px}.mpay-mobile-brand{display:none;color:var(--mpay-green);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.12em}.mpay-mobile-logo{display:none;width:108px;height:42px;object-fit:contain;object-position:left center}.mpay-close{display:grid;place-items:center;width:38px;height:38px;border:0;border-radius:50%;background:#f6f7f5;color:#607066;cursor:pointer}.mpay-close:hover{background:#edf2ed;color:var(--mpay-green)}.mpay-tabs{display:flex;align-items:center;gap:28px;margin-top:34px;border-bottom:1px solid #ecefec}.mpay-tab{appearance:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:0 0 14px;background:transparent;color:#68716b;font-size:13px;white-space:nowrap;cursor:pointer}.mpay-tab.is-active{color:var(--mpay-green);border-color:var(--mpay-green);font-weight:700}.mpay-tab:disabled{cursor:default;opacity:.65}.mpay-tab.mpay-more{margin-left:auto;cursor:default;color:#9ba19d}.mpay-method-body{display:flex;flex:1;flex-direction:column;justify-content:center;min-height:275px}.mpay-field-group{display:grid;gap:24px}.mpay-field-caption{display:block;margin-bottom:10px;color:#8b938e;font-size:11px;text-transform:uppercase;letter-spacing:.08em}.mpay-chips{display:flex;gap:10px;flex-wrap:wrap}.mpay-chip{appearance:none;padding:9px 14px;border:1px solid transparent;border-radius:999px;background:#f5f6f4;color:#59615c;font-size:12px;cursor:pointer}.mpay-chip.is-selected{background:var(--mpay-green);color:#fff}.mpay-field>span{display:block;margin-bottom:7px;color:#89908b;font-size:12px}.mpay-input-wrap{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;border-bottom:1px solid #dfe4e0;padding:7px 2px 10px;color:#7e8981}.mpay-input-wrap:focus-within{border-color:var(--mpay-green);color:var(--mpay-green)}.mpay-input-wrap.has-error{border-color:#c24b3e}.mpay-input-wrap input{min-width:0;border:0;outline:0;background:transparent;color:var(--mpay-ink);font-size:17px;letter-spacing:.04em}.mpay-input-wrap input::placeholder{color:#b0b6b2}.mpay-valid{display:grid;place-items:center;width:21px;height:21px;border-radius:50%;background:#e9f6ed;color:var(--mpay-green);font-weight:800}.mpay-field small{display:block;margin-top:9px;color:#9ba19d;font-size:11px}.mpay-card-redirect{display:flex;align-items:flex-start;gap:16px;padding:22px;border-radius:16px;background:#f7f9f7;border:1px solid #edf0ed}.mpay-card-icon{display:grid;place-items:center;flex:none;width:42px;height:42px;border-radius:13px;background:#e9f5ec;color:var(--mpay-green)}.mpay-card-redirect strong{font-size:14px}.mpay-card-redirect p{margin:6px 0 0;color:#707973;font-size:12px;line-height:1.6}.mpay-primary{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:54px;border:0;border-radius:4px;background:var(--mpay-green);color:#fff;font-weight:750;font-size:14px;cursor:pointer;box-shadow:0 10px 24px rgba(61,154,82,.2);transition:transform .15s ease,background .15s ease,box-shadow .15s ease}.mpay-primary:hover:not(:disabled){background:var(--mpay-green-dark);transform:translateY(-1px);box-shadow:0 13px 28px rgba(61,154,82,.26)}.mpay-primary:disabled{cursor:not-allowed;opacity:.56;box-shadow:none}.mpay-spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.38);border-top-color:#fff;border-radius:50%;animation:mpay-spin .8s linear infinite}.mpay-outcome{display:flex;flex-direction:column;align-items:center;text-align:center;padding:24px}.mpay-outcome-icon{display:grid;place-items:center;width:72px;height:72px;border-radius:50%;font-size:30px;font-weight:800}.mpay-outcome.is-success .mpay-outcome-icon{background:#e9f6ed;color:var(--mpay-green)}.mpay-outcome.is-pending .mpay-outcome-icon{background:#edf6ef;color:var(--mpay-green)}.mpay-outcome h3{margin:18px 0 7px;font-size:19px}.mpay-outcome p{max-width:300px;margin:0;color:var(--mpay-muted);font-size:13px;line-height:1.6}.mpay-pulse{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;animation:mpay-pulse 1.8s ease-in-out infinite}.mpay-inline-message{margin-top:20px;padding:11px 13px;border-radius:9px;font-size:12px}.mpay-inline-message.is-error{background:#fff0ee;color:#a13a30}.mpay-secure{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:16px;color:#9aa29d;font-size:10px}.mpay-secure svg{width:13px;height:13px}.mpay-secure i{font-style:normal}
+.mpay-action{display:flex;flex-direction:column;padding:42px 44px 32px;background:rgba(255,255,255,.98)}.mpay-action-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.mpay-action-header h2{margin:0;font-size:27px;line-height:1.2;font-weight:540;letter-spacing:-.035em}.mpay-action-header>svg{color:var(--mpay-green);width:18px}.mpay-mobile-brand{display:none;color:var(--mpay-green);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.12em}.mpay-mobile-logo{display:none;width:108px;height:42px;object-fit:contain;object-position:left center}.mpay-close{display:grid;place-items:center;width:38px;height:38px;border:0;border-radius:50%;background:#f6f7f5;color:#607066;cursor:pointer}.mpay-close:hover{background:#edf2ed;color:var(--mpay-green)}.mpay-tabs{display:flex;align-items:center;gap:28px;margin-top:34px;border-bottom:1px solid #ecefec}.mpay-tab{appearance:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:0 0 14px;background:transparent;color:#68716b;font-size:13px;white-space:nowrap;cursor:pointer}.mpay-tab.is-active{color:var(--mpay-green);border-color:var(--mpay-green);font-weight:700}.mpay-tab:disabled{cursor:default;opacity:.65}.mpay-tab.mpay-more{margin-left:auto;cursor:default;color:#9ba19d}.mpay-method-body{display:flex;flex:1;flex-direction:column;justify-content:center;min-height:275px}.mpay-field-group{display:grid;gap:24px}.mpay-field-caption{display:block;margin-bottom:10px;color:#8b938e;font-size:11px;text-transform:uppercase;letter-spacing:.08em}.mpay-chips{display:flex;gap:10px;flex-wrap:wrap}.mpay-chip{appearance:none;padding:9px 14px;border:1px solid transparent;border-radius:999px;background:#f5f6f4;color:#59615c;font-size:12px;cursor:pointer}.mpay-chip.is-selected{background:var(--mpay-green);color:#fff}.mpay-chip:disabled{cursor:not-allowed;opacity:.5}.mpay-chip small{font-size:inherit}.mpay-note{padding:16px 18px;border-radius:14px;background:#f7f9f7;border:1px solid #edf0ed;color:#59615c;font-size:13px;line-height:1.6}.mpay-field>span{display:block;margin-bottom:7px;color:#89908b;font-size:12px}.mpay-input-wrap{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;border-bottom:1px solid #dfe4e0;padding:7px 2px 10px;color:#7e8981}.mpay-input-wrap:focus-within{border-color:var(--mpay-green);color:var(--mpay-green)}.mpay-input-wrap.has-error{border-color:#c24b3e}.mpay-input-wrap input{min-width:0;border:0;outline:0;background:transparent;color:var(--mpay-ink);font-size:17px;letter-spacing:.04em}.mpay-input-wrap input::placeholder{color:#b0b6b2}.mpay-valid{display:grid;place-items:center;width:21px;height:21px;border-radius:50%;background:#e9f6ed;color:var(--mpay-green);font-weight:800}.mpay-field small{display:block;margin-top:9px;color:#9ba19d;font-size:11px}.mpay-card-redirect{display:flex;align-items:flex-start;gap:16px;padding:22px;border-radius:16px;background:#f7f9f7;border:1px solid #edf0ed}.mpay-card-icon{display:grid;place-items:center;flex:none;width:42px;height:42px;border-radius:13px;background:#e9f5ec;color:var(--mpay-green)}.mpay-card-redirect strong{font-size:14px}.mpay-card-redirect p{margin:6px 0 0;color:#707973;font-size:12px;line-height:1.6}.mpay-primary{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:54px;border:0;border-radius:4px;background:var(--mpay-green);color:#fff;font-weight:750;font-size:14px;cursor:pointer;box-shadow:0 10px 24px rgba(61,154,82,.2);transition:transform .15s ease,background .15s ease,box-shadow .15s ease}.mpay-primary:hover:not(:disabled){background:var(--mpay-green-dark);transform:translateY(-1px);box-shadow:0 13px 28px rgba(61,154,82,.26)}.mpay-primary:disabled{cursor:not-allowed;opacity:.56;box-shadow:none}.mpay-spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.38);border-top-color:#fff;border-radius:50%;animation:mpay-spin .8s linear infinite}.mpay-outcome{display:flex;flex-direction:column;align-items:center;text-align:center;padding:24px}.mpay-outcome-icon{display:grid;place-items:center;width:72px;height:72px;border-radius:50%;font-size:30px;font-weight:800}.mpay-outcome.is-success .mpay-outcome-icon{background:#e9f6ed;color:var(--mpay-green)}.mpay-outcome.is-pending .mpay-outcome-icon{background:#edf6ef;color:var(--mpay-green)}.mpay-outcome h3{margin:18px 0 7px;font-size:19px}.mpay-outcome p{max-width:300px;margin:0;color:var(--mpay-muted);font-size:13px;line-height:1.6}.mpay-pulse{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;animation:mpay-pulse 1.8s ease-in-out infinite}.mpay-inline-message{margin-top:20px;padding:11px 13px;border-radius:9px;font-size:12px}.mpay-inline-message.is-error{background:#fff0ee;color:#a13a30}.mpay-secure{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:16px;color:#9aa29d;font-size:10px}.mpay-secure svg{width:13px;height:13px}.mpay-secure i{font-style:normal}
 @keyframes mpay-spin{to{transform:rotate(360deg)}}@keyframes mpay-pulse{0%,100%{box-shadow:0 0 0 0 rgba(61,154,82,.14)}50%{box-shadow:0 0 0 16px rgba(61,154,82,0)}}
 @media(max-width:680px){.mpay-checkout{display:flex;flex-direction:column;width:100%;min-height:100dvh;border-radius:0;box-shadow:none;background:transparent}.mpay-summary{flex:none;min-height:240px;border-radius:0}.mpay-summary-content{min-height:240px;padding:25px 22px 56px}.mpay-brand-row{font-size:13px}.mpay-brand-mark{width:27px;height:27px}.mpay-amount-block{align-items:center;margin-top:26px;text-align:center}.mpay-eyebrow{font-size:10px}.mpay-amount{font-size:34px}.mpay-lines{margin-top:22px}.mpay-meta,.mpay-support{display:none}.mpay-action{position:relative;flex:1;margin-top:-30px;padding:27px 22px 22px;border-radius:28px 28px 0 0;background:#fff;box-shadow:0 -12px 40px rgba(22,62,35,.09)}.mpay-action-header h2{font-size:22px}.mpay-mobile-brand,.mpay-mobile-logo{display:block;margin-bottom:5px}.mpay-tabs{margin-top:25px;gap:22px;overflow-x:auto}.mpay-method-body{min-height:245px}.mpay-secure{flex-wrap:wrap}.mpay-more{display:none}}
 @media(min-width:681px) and (max-height:650px){.mpay-checkout{min-height:500px}.mpay-summary-content{padding-top:28px;padding-bottom:28px}.mpay-amount-block{margin-top:34px}.mpay-action{padding-top:30px;padding-bottom:24px}.mpay-method-body{min-height:220px}}
