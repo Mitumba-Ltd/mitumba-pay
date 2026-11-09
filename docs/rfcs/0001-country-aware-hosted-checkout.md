@@ -190,6 +190,7 @@ type PaymentMethodType = KnownPaymentMethod | (string & {})
 
 interface CheckoutMethodDescriptor {
   type: PaymentMethodType
+  network?: string             // mobile money: the wallet, e.g. "mpesa"
   display_name: string
   status: 'available' | 'temporarily_unavailable'
   input_fields: Array<{
@@ -223,6 +224,8 @@ Rules:
 
 - The UI renders only methods returned by this context.
 - Provider names do not appear in method descriptors.
+- Mobile money is one descriptor per network the market offers (e.g. M-Pesa, Airtel Money), each
+  with its `network`. A network no enabled provider reaches is `temporarily_unavailable`, not hidden.
 - The backend derives availability from the same controls used to authorize initiation.
 - Initiation still validates availability to handle a race after context was loaded.
 - Unknown method types remain parseable. A UI may show a server-provided generic action or
@@ -235,12 +238,14 @@ Rules:
 ```json
 {
   "idempotency_key": "intent_opaque",
-  "method": { "type": "mobile_money", "phone": "+254712345678" }
+  "method": { "type": "mobile_money", "network": "mpesa", "phone": "+254712345678" }
 }
 ```
 
 Country is omitted. Phone is generic E.164 in the public SDK; the backend validates it
-against the session market. Card submits no PAN, CVV, provider token, or buyer email.
+against the session market. `network` is the descriptor's: the backend routes to a provider that
+reaches that network and never to another network's (an M-Pesa prompt is never sent for an Airtel
+number). The network is never inferred from the number, because numbers are portable. Card submits no PAN, CVV, provider token, or buyer email.
 
 Response preserves the current provider-neutral `next_action` model:
 

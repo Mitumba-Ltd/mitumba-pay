@@ -35,7 +35,7 @@ const pay = new MitumbaPay({ token: () => getAccessToken() })
 await pay.initiateCheckout({
   order_id: 'ord_123',
   idempotency_key: crypto.randomUUID(),
-  method: { type: 'mobile_money', phone: '+254712345678' },
+  method: { type: 'mobile_money', network: 'mpesa', phone: '+254712345678' },
 })
 
 const final = await pay.pollCheckoutStatus('ord_123')
@@ -47,6 +47,9 @@ You pick a **method** (`mobile_money` or `card`). The backend picks the **provid
 Provider identifiers are observable metadata, not routing choices — the backend can add
 MTN MoMo, Vodacom, Paystack, etc. without an SDK release. Follow `next_action`, never a
 provider `switch`.
+
+Mobile money also names the **network** the buyer pays from (mpesa, irtel_money, … from the market's mobile_money_networks, or a session descriptor's 
+etwork). Ask the buyer; never infer it from the number, because numbers move between networks. The backend sends the prompt to that network only, through whichever provider reaches it.
 
 ## Architecture
 

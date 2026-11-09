@@ -21,7 +21,7 @@ const pay = new MitumbaPay({
 const { next_action } = await pay.initiateCheckout({
   order_id: 'ord_123',
   idempotency_key: crypto.randomUUID(),
-  method: { type: 'mobile_money', phone: '+254712345678' },
+  method: { type: 'mobile_money', network: 'mpesa', phone: '+254712345678' },
 })
 
 // 2) Continue based on next_action.
@@ -63,10 +63,13 @@ The buyer's own mobile-money numbers, per market, as one-tap choices at checkout
 
 ```ts
 const { data } = await pay.paymentMethods.list('KE') // default first
-await pay.paymentMethods.save({ market_code: 'KE', method: { type: 'mobile_money', phone: '0712 345 678' } })
+await pay.paymentMethods.save({ market_code: 'KE', method: { type: 'mobile_money', network: 'airtel_money', phone: '0733 000 222' } })
 await pay.paymentMethods.setDefault(id)
 await pay.paymentMethods.remove(id)
-const choices = savedPhoneChoices(data) // [{ label: 'Main ••• 678', value: '+254712345678', is_default: true }]
+// Pass the market's networks so a renamed number still says which wallet it pays from.
+const choices = savedPhoneChoices(data, market.mobile_money_networks)
+// [{ label: 'M-Pesa ••• 678', value: '+254712345678', network: 'mpesa', is_default: true },
+//  { label: 'Work · Airtel Money ••• 222', value: '+254733000222', network: 'airtel_money', is_default: false }]
 ```
 
 Pass a saved method's `method` to `initiateCheckout` or `createAttempt` unchanged. Saving a number that is already saved returns the existing entry instead of a duplicate. Cards cannot be saved (`422 payment_method_not_savable`) until a provider issues reusable tokens.
