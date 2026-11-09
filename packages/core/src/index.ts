@@ -4,7 +4,9 @@
  * Knows the shape of requests/responses (via @mitumba/pay-contract) and nothing
  * about how payments are processed. No provider implementations, no secrets.
  */
-export { MitumbaPay } from './client'
+export { MitumbaPay, PaymentMethods } from './client'
+export { savedPhoneChoices } from './saved-methods'
+export type { SavedPhoneChoice } from './saved-methods'
 export { HttpClient } from './http'
 export { PayError, parseRetryAfter } from './errors'
 export type { PayErrorOptions } from './errors'

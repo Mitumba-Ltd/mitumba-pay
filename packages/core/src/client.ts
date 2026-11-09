@@ -19,6 +19,12 @@ import {
   type CreateAttemptInput,
   type CheckoutAttempt,
   type CheckoutSessionStatusResponse,
+  savedPaymentMethodsResponseSchema,
+  savedPaymentMethodEnvelopeSchema,
+  savePaymentMethodInputSchema,
+  type SavedPaymentMethod,
+  type SavedPaymentMethodsResponse,
+  type SavePaymentMethodInput,
 } from '@mitumba/pay-contract'
 import { HttpClient } from './http'
 import type { MitumbaPayConfig, RequestOptions } from './config'
@@ -31,8 +37,12 @@ import { pollCheckoutStatus, pollStatus, type PollOptions, type PollSessionOptio
 export class MitumbaPay {
   private readonly http: HttpClient
 
+  /** The buyer's saved payment methods, per market (ADR-012). Requires a buyer `token`. */
+  readonly paymentMethods: PaymentMethods
+
   constructor(config: MitumbaPayConfig = {}) {
     this.http = new HttpClient(config)
+    this.paymentMethods = new PaymentMethods(this.http)
   }
 
   /**
@@ -186,5 +196,40 @@ export class MitumbaPay {
       (signal) => this.getCheckoutSessionStatus(sessionId, clientSecret, { signal }),
       options,
     )
+  }
+}
+
+/**
+ * Saved payment methods: the buyer's own mobile-money numbers, per market, offered as one-tap choices
+ * at checkout. A saved method's `method` is passed unchanged to `initiateCheckout` or `createAttempt`.
+ */
+export class PaymentMethods {
+  constructor(private readonly http: HttpClient) {}
+
+  /** This buyer's methods in `marketCode`, default first. */
+  async list(marketCode: string, options?: RequestOptions): Promise<SavedPaymentMethodsResponse> {
+    const raw = await this.http.get<unknown>(`/pay/payment-methods?market=${encodeURIComponent(marketCode)}`, options)
+    return savedPaymentMethodsResponseSchema.parse(raw)
+  }
+
+  /**
+   * Save a number (any local form; the backend normalizes it for the market). Saving one that is
+   * already saved returns it instead of a duplicate.
+   */
+  async save(input: SavePaymentMethodInput, options?: RequestOptions): Promise<SavedPaymentMethod> {
+    const body = savePaymentMethodInputSchema.parse(input)
+    const raw = await this.http.post<unknown>('/pay/payment-methods', body, options)
+    return savedPaymentMethodEnvelopeSchema.parse(raw).data
+  }
+
+  /** Forget a method. Removing the default promotes the newest remaining one in that market. */
+  async remove(id: string, options?: RequestOptions): Promise<void> {
+    await this.http.delete<unknown>(`/pay/payment-methods/${encodeURIComponent(id)}`, options)
+  }
+
+  /** Make a method the one preselected in its market. */
+  async setDefault(id: string, options?: RequestOptions): Promise<SavedPaymentMethod> {
+    const raw = await this.http.post<unknown>(`/pay/payment-methods/${encodeURIComponent(id)}/default`, undefined, options)
+    return savedPaymentMethodEnvelopeSchema.parse(raw).data
   }
 }
