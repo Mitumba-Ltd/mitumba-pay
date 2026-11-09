@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MitumbaPayWidget } from './components'
+import { PayError } from '@mitumba/pay'
 import type { UseCheckoutResult } from './useCheckout'
 
 const idleCheckout: UseCheckoutResult = {
@@ -33,15 +34,66 @@ describe('MitumbaPayWidget', () => {
     expect(screen.getByText('ORD-2048-KE')).toBeTruthy()
   })
 
-  it('normalizes a Kenyan local number and submits a provider-neutral method', () => {
+  it('normalizes a local number for the market it is given and submits a provider-neutral method', () => {
+    const onPay = vi.fn()
+    render(
+      <MitumbaPayWidget
+        {...baseProps}
+        onPay={onPay}
+        phoneFormat={{ callingCode: '+254', nationalLength: [9], example: '+254712345678' }}
+      />,
+    )
+
+    const input = screen.getByLabelText(/Mobile number/i)
+    expect(input.getAttribute('placeholder')).toBe('+254712345678')
+    fireEvent.change(input, { target: { value: '0712 345 678' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Pay KES 6,000.00' }))
+
+    expect(onPay).toHaveBeenCalledWith({ method: 'mobile_money', phone: '+254712345678' })
+  })
+
+  it('follows another market rather than assuming Kenya', () => {
+    const onPay = vi.fn()
+    render(<MitumbaPayWidget {...baseProps} onPay={onPay} phoneFormat={{ callingCode: '+256', nationalLength: [9] }} />)
+
+    const input = screen.getByLabelText(/Mobile number/i)
+    fireEvent.change(input, { target: { value: '+254712345678' } })
+    expect((screen.getByRole('button', { name: 'Pay KES 6,000.00' }) as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.change(input, { target: { value: '0772 123 456' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Pay KES 6,000.00' }))
+    expect(onPay).toHaveBeenCalledWith({ method: 'mobile_money', phone: '+256772123456' })
+  })
+
+  it('without a market phone format, accepts only a full international number', () => {
     const onPay = vi.fn()
     render(<MitumbaPayWidget {...baseProps} onPay={onPay} />)
 
     const input = screen.getByLabelText(/Mobile number/i)
     fireEvent.change(input, { target: { value: '0712 345 678' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Pay KES 6,000.00' }))
+    expect((screen.getByRole('button', { name: 'Pay KES 6,000.00' }) as HTMLButtonElement).disabled).toBe(true)
 
-    expect(onPay).toHaveBeenCalledWith({ method: 'mobile_money', phone: '+254712345678' })
+    fireEvent.change(input, { target: { value: '+255712345678' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Pay KES 6,000.00' }))
+    expect(onPay).toHaveBeenCalledWith({ method: 'mobile_money', phone: '+255712345678' })
+  })
+
+  it('says payments are temporarily unavailable on a 503, with the server-requested wait', () => {
+    render(
+      <MitumbaPayWidget
+        {...baseProps}
+        checkout={{
+          ...idleCheckout,
+          phase: 'unavailable',
+          error: new PayError(503, { error: 'payment_initiation_paused' }, { retryAfterMs: 15 * 60_000 }),
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Payments are temporarily unavailable. Nothing was charged. Please try again in about 15 minutes.',
+    )
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
   })
 
   it('switches to card without collecting raw card details', () => {

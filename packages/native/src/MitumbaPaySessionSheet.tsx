@@ -14,8 +14,10 @@ import type {
   CheckoutInputField,
   SessionPaymentMethod,
 } from '@mitumba/pay'
+import { normalizePhone } from '@mitumba/pay'
 import { payTheme as t } from './theme'
 import { formatMoney } from './formatMoney'
+import { unavailableMessage } from './unavailable'
 import { type UseCheckoutSessionResult, type SessionPhase } from './useCheckoutSession'
 
 const PHASE_MESSAGE: Record<SessionPhase, string> = {
@@ -30,6 +32,7 @@ const PHASE_MESSAGE: Record<SessionPhase, string> = {
   failed: 'That payment didn’t go through.',
   retryable: 'Payment wasn’t completed. You can safely try again.',
   timeout: 'Still confirming. Keep this sheet open or check your order shortly.',
+  unavailable: unavailableMessage(null),
   error: 'We couldn’t load or start the payment.',
 }
 
@@ -40,6 +43,8 @@ export interface MitumbaPaySessionSheetProps {
   idempotencyKey: () => string
   onClose: () => void
   title?: string
+  /** BCP 47 locale for amounts, from the host's market (e.g. `en-KE`). Defaults to the device locale. */
+  locale?: string
 }
 
 /**
@@ -55,6 +60,7 @@ export function MitumbaPaySessionSheet({
   idempotencyKey,
   onClose,
   title = 'Choose how to pay',
+  locale,
 }: MitumbaPaySessionSheetProps) {
   const { phase, context, error } = checkout
   const methods = context?.available_methods ?? []
@@ -78,13 +84,20 @@ export function MitumbaPaySessionSheet({
     phase === 'redirecting' ||
     phase === 'awaiting_confirmation'
   const done = phase === 'paid'
-  const failed = phase === 'failed' || phase === 'retryable' || phase === 'error'
-  const message = phase === 'error' && error ? error.message : PHASE_MESSAGE[phase]
+  const failed = phase === 'failed' || phase === 'retryable' || phase === 'error' || phase === 'unavailable'
+  const message =
+    phase === 'unavailable'
+      ? unavailableMessage(error?.retryAfterMs)
+      : phase === 'error' && error
+        ? error.message
+        : PHASE_MESSAGE[phase]
 
   const requiredFields = selected?.input_fields.filter((f) => f.required) ?? []
   const fieldsComplete = requiredFields.every((f) => (fieldValues[f.name] ?? '').trim().length > 0)
+  // A typed phone must be a number in the session's market (its field names the calling code).
+  const phoneInvalid = selected !== null && phoneOf(selected, fieldValues) === null
   const methodUnavailable = selected?.status === 'temporarily_unavailable'
-  const disabled = busy || done || !selected || methodUnavailable || !fieldsComplete
+  const disabled = busy || done || !selected || methodUnavailable || !fieldsComplete || phoneInvalid
 
   const submit = () => {
     if (!selected) return
@@ -94,7 +107,7 @@ export function MitumbaPaySessionSheet({
   }
 
   const amountLabel = context
-    ? formatMoney(context.amount, context.market.code === 'KE' ? 'en-KE' : undefined)
+    ? formatMoney(context.amount, locale)
     : ''
 
   return (
@@ -136,7 +149,7 @@ export function MitumbaPaySessionSheet({
                     <Text style={styles.lineLabel}>{item.label}</Text>
                     <View style={styles.dots} />
                     <Text style={styles.lineValue}>
-                      {formatMoney(item.amount, context.market.code === 'KE' ? 'en-KE' : undefined)}
+                      {formatMoney(item.amount, locale)}
                     </Text>
                   </View>
                 ))}
@@ -289,7 +302,7 @@ function buildMethod(
 ): SessionPaymentMethod | null {
   if (descriptor.type === 'card') return { type: 'card' }
   if (descriptor.type === 'mobile_money') {
-    const phone = (values.phone ?? '').trim()
+    const phone = phoneOf(descriptor, values)
     return phone ? { type: 'mobile_money', phone } : null
   }
   return null
@@ -441,3 +454,16 @@ const styles = StyleSheet.create({
   outcomeSuccessText: { color: t.color.onGreen },
   outcomeMessage: { maxWidth: 280, marginTop: 18, color: t.color.muted, fontSize: 13, lineHeight: 20, textAlign: 'center' },
 })
+
+/**
+ * The descriptor's phone as E.164: normalized against the field's calling code when the session
+ * supplies one (so `0712 345 678` works), otherwise taken as typed. Undefined when nothing is typed or
+ * the method has no phone field; null when what was typed is not a number in the session's market.
+ */
+function phoneOf(descriptor: CheckoutMethodDescriptor, values: Record<string, string>): string | null | undefined {
+  const field = descriptor.input_fields.find((f) => f.name === 'phone')
+  const raw = (values.phone ?? '').trim()
+  if (!field || raw === '') return undefined
+  if (!field.calling_code) return raw
+  return normalizePhone(raw, { callingCode: field.calling_code })
+}

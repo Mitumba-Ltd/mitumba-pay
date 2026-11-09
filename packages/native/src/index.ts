@@ -23,11 +23,12 @@ export type {
 export { MitumbaPaySessionSheet } from './MitumbaPaySessionSheet'
 export type { MitumbaPaySessionSheetProps } from './MitumbaPaySessionSheet'
 export { formatMoney } from './formatMoney'
+export { unavailableMessage } from './unavailable'
 
 export { payTheme } from './theme'
 export type { PayTheme } from './theme'
 
-export { MitumbaPay, PayError } from '@mitumba/pay'
+export { MitumbaPay, PayError, currencyDigits, isValidPhone, nationalPart, normalizePhone } from '@mitumba/pay'
 export type {
   MitumbaPayConfig,
   InitiateCheckoutInput,
@@ -39,4 +40,5 @@ export type {
   CreateCheckoutSessionResponse,
   SessionPaymentMethod,
   Money,
+  PhoneFormat,
 } from '@mitumba/pay'
