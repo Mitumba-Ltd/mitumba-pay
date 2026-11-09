@@ -6,6 +6,7 @@ import {
   createAttemptInputSchema,
   sessionPaymentMethodSchema,
   checkoutSessionStatusResponseSchema,
+  methodDescriptorKey,
 } from './session'
 import { E164_PHONE } from './checkout'
 import { PAY_CONTRACT_VERSION } from './version'
@@ -86,10 +87,25 @@ describe('checkout session context', () => {
     const parsed = checkoutSessionContextSchema.parse({
       ...base,
       available_methods: [
-        { type: 'airtel_money', display_name: 'Airtel Money', status: 'available', input_fields: [] },
+        { type: 'bank_transfer', display_name: 'Bank transfer', status: 'available', input_fields: [] },
       ],
     })
-    expect(parsed.available_methods[0]?.type).toBe('airtel_money')
+    expect(parsed.available_methods[0]?.type).toBe('bank_transfer')
+  })
+
+  it('reads one mobile-money descriptor per network, each keyed apart', () => {
+    const mpesa = { ...base.available_methods[0]!, network: 'mpesa' }
+    const airtel = { ...mpesa, network: 'airtel_money', display_name: 'Airtel Money', status: 'temporarily_unavailable' as const }
+    const card = { type: 'card', display_name: 'Card', status: 'available' as const, input_fields: [] }
+    const parsed = checkoutSessionContextSchema.parse({ ...base, available_methods: [mpesa, airtel, card] })
+    expect(parsed.available_methods.map((m) => m.network)).toEqual(['mpesa', 'airtel_money', undefined])
+    expect(parsed.available_methods.map(methodDescriptorKey)).toEqual(['mobile_money:mpesa', 'mobile_money:airtel_money', 'card'])
+  })
+
+  it('rejects an empty descriptor network', () => {
+    expect(() =>
+      checkoutSessionContextSchema.parse({ ...base, available_methods: [{ ...base.available_methods[0]!, network: '' }] }),
+    ).toThrow()
   })
 
   it('rejects a negative amount', () => {
@@ -103,7 +119,7 @@ describe('session attempt initiation', () => {
   it('accepts a mobile_money attempt with a generic E.164 phone', () => {
     const parsed = createAttemptInputSchema.parse({
       idempotency_key: 'intent_1',
-      method: { type: 'mobile_money', phone: '+254712345678' },
+      method: { type: 'mobile_money', network: 'mpesa', phone: '+254712345678' },
     })
     expect(parsed.method.type).toBe('mobile_money')
   })
@@ -111,9 +127,9 @@ describe('session attempt initiation', () => {
   it('accepts a non-Kenyan E.164 number (session is not country-locked)', () => {
     const parsed = createAttemptInputSchema.parse({
       idempotency_key: 'intent_1',
-      method: { type: 'mobile_money', phone: '+2348012345678' },
+      method: { type: 'mobile_money', network: 'mpesa', phone: '+2348012345678' },
     })
-    expect(parsed.method).toEqual({ type: 'mobile_money', phone: '+2348012345678' })
+    expect(parsed.method).toEqual({ type: 'mobile_money', network: 'mpesa', phone: '+2348012345678' })
   })
 
   it('accepts a card attempt with no fields', () => {
@@ -124,7 +140,12 @@ describe('session attempt initiation', () => {
   })
 
   it('rejects a phone without a leading +', () => {
-    expect(() => sessionPaymentMethodSchema.parse({ type: 'mobile_money', phone: '254712345678' })).toThrow()
+    expect(() => sessionPaymentMethodSchema.parse({ type: 'mobile_money', network: 'mpesa', phone: '254712345678' })).toThrow()
+  })
+
+  it('rejects mobile money that does not name its network', () => {
+    expect(() => sessionPaymentMethodSchema.parse({ type: 'mobile_money', phone: '+254712345678' })).toThrow()
+    expect(() => sessionPaymentMethodSchema.parse({ type: 'mobile_money', network: '', phone: '+254712345678' })).toThrow()
   })
 
   it('exposes a generic E.164 pattern', () => {

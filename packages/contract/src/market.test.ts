@@ -35,6 +35,23 @@ describe('market schema', () => {
     expect(() => marketSchema.parse({ ...kenya, calling_code: '254' })).toThrow()
   })
 
+  it('reads the mobile-money networks a market offers, in order', () => {
+    const networks = [
+      { id: 'mpesa', name: 'M-Pesa' },
+      { id: 'airtel_money', name: 'Airtel Money' },
+    ]
+    expect(marketSchema.parse({ ...kenya, mobile_money_networks: networks }).mobile_money_networks).toEqual(networks)
+  })
+
+  it('reads a market from a backend without networks as offering none', () => {
+    expect(marketSchema.parse(kenya).mobile_money_networks).toEqual([])
+  })
+
+  it('rejects a network without an id or a name', () => {
+    expect(() => marketSchema.parse({ ...kenya, mobile_money_networks: [{ id: '', name: 'M-Pesa' }] })).toThrow()
+    expect(() => marketSchema.parse({ ...kenya, mobile_money_networks: [{ id: 'mpesa', name: '' }] })).toThrow()
+  })
+
   it('parses a markets discovery response', () => {
     const parsed = marketsResponseSchema.parse({
       version: PAY_CONTRACT_VERSION,

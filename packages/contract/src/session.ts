@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { PAY_CONTRACT_VERSION } from './version'
 import { moneySchema, type Money } from './money'
 import { paymentMethodTypeSchema, type PaymentMethodType } from './market'
-import { type CheckoutNextAction, checkoutNextActionSchema, E164_PHONE } from './checkout'
+import { type CheckoutNextAction, checkoutNextActionSchema, mobileMoneyMethodSchema } from './checkout'
 
 /**
  * Checkout sessions (RFC 0001 ยง6-8). A session is the long-term public
@@ -105,9 +105,15 @@ export const checkoutInputFieldSchema = z.object({
 /**
  * A payment method the session makes available. Provider names never appear
  * here — only the buyer-visible method type and the inputs it needs.
+ *
+ * Mobile money comes as one descriptor per network (e.g. "M-Pesa", "Airtel Money"), each carrying its
+ * `network`, so the buyer picks their wallet directly. Send that `network` back in the attempt. Use
+ * {@link methodDescriptorKey} to tell descriptors of the same type apart.
  */
 export interface CheckoutMethodDescriptor {
   type: PaymentMethodType
+  /** For mobile money: the network this descriptor pays from, e.g. "mpesa". */
+  network?: string
   display_name: string
   status: 'available' | 'temporarily_unavailable'
   input_fields: CheckoutInputField[]
@@ -115,10 +121,16 @@ export interface CheckoutMethodDescriptor {
 
 export const checkoutMethodDescriptorSchema = z.object({
   type: paymentMethodTypeSchema,
+  network: z.string().min(1).optional(),
   display_name: z.string().min(1),
   status: z.enum(['available', 'temporarily_unavailable']),
   input_fields: z.array(checkoutInputFieldSchema),
 })
+
+/** A key unique within a session's `available_methods`: the type, plus the network when it has one. */
+export function methodDescriptorKey(descriptor: Pick<CheckoutMethodDescriptor, 'type' | 'network'>): string {
+  return descriptor.network ? `${descriptor.type}:${descriptor.network}` : descriptor.type
+}
 
 export interface CheckoutLineItem {
   label: string
@@ -177,15 +189,16 @@ export const checkoutSessionContextSchema = z.object({
 
 /**
  * Buyer-selected method for a session attempt. The client picks a method type
- * and supplies its required input; the backend picks the provider. Card carries
- * no PAN/CVV/token/email — the backend obtains buyer identity itself.
+ * and supplies its required input; the backend picks the provider. Mobile money
+ * names the descriptor's `network`. Card carries no PAN/CVV/token/email — the
+ * backend obtains buyer identity itself.
  */
 export type SessionPaymentMethod =
-  | { type: 'mobile_money'; phone: string }
+  | { type: 'mobile_money'; network: string; phone: string }
   | { type: 'card' }
 
 export const sessionPaymentMethodSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('mobile_money'), phone: z.string().regex(E164_PHONE) }),
+  mobileMoneyMethodSchema,
   z.object({ type: z.literal('card') }),
 ])
 

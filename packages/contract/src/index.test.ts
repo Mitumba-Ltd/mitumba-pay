@@ -12,7 +12,7 @@ describe('pay-contract schemas', () => {
     const parsed = initiateCheckoutInputSchema.parse({
       order_id: 'ord_123',
       idempotency_key: 'idem_abc',
-      method: { type: 'mobile_money', phone: '+254712345678' },
+      method: { type: 'mobile_money', network: 'mpesa', phone: '+254712345678' },
     })
     expect(parsed.method.type).toBe('mobile_money')
   })
@@ -22,7 +22,17 @@ describe('pay-contract schemas', () => {
       initiateCheckoutInputSchema.parse({
         order_id: 'ord_123',
         idempotency_key: 'idem_abc',
-        method: { type: 'mobile_money', phone: '0712345678' },
+        method: { type: 'mobile_money', network: 'mpesa', phone: '0712345678' },
+      }),
+    ).toThrow()
+  })
+
+  it('rejects mobile money without a network: the prompt must go to the wallet the buyer chose', () => {
+    expect(() =>
+      initiateCheckoutInputSchema.parse({
+        order_id: 'ord_123',
+        idempotency_key: 'idem_abc',
+        method: { type: 'mobile_money', phone: '+254712345678' },
       }),
     ).toThrow()
   })
@@ -32,9 +42,9 @@ describe('pay-contract schemas', () => {
       const parsed = initiateCheckoutInputSchema.parse({
         order_id: 'ord_123',
         idempotency_key: 'idem_abc',
-        method: { type: 'mobile_money', phone },
+        method: { type: 'mobile_money', network: 'mpesa', phone },
       })
-      expect(parsed.method).toEqual({ type: 'mobile_money', phone })
+      expect(parsed.method).toEqual({ type: 'mobile_money', network: 'mpesa', phone })
     }
   })
 

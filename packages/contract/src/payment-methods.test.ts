@@ -9,8 +9,8 @@ import {
 const method = {
   id: 'pm_1',
   market_code: 'UG',
-  method: { type: 'mobile_money', phone: '+256772123456' },
-  label: 'Mobile money',
+  method: { type: 'mobile_money', network: 'mtn_momo', phone: '+256772123456' },
+  label: 'MTN MoMo',
   is_default: true,
   created_at: '2026-11-09T10:00:00Z',
 }
@@ -24,17 +24,27 @@ describe('saved payment methods contract', () => {
 
   it('rejects a saved method that is not mobile money or not E.164', () => {
     expect(() => savedPaymentMethodEnvelopeSchema.parse({ data: { ...method, method: { type: 'card' } } })).toThrow()
-    expect(() => savedPaymentMethodEnvelopeSchema.parse({ data: { ...method, method: { type: 'mobile_money', phone: '0772123456' } } })).toThrow()
+    expect(() => savedPaymentMethodEnvelopeSchema.parse({ data: { ...method, method: { type: 'mobile_money', network: 'mpesa', phone: '0772123456' } } })).toThrow()
     expect(() => savedPaymentMethodEnvelopeSchema.parse({ data: { ...method, market_code: 'ug' } })).toThrow()
   })
 
   it('accepts a local-form phone on save, trimmed, and bounds the label', () => {
     expect(
-      savePaymentMethodInputSchema.parse({ market_code: 'KE', method: { type: 'mobile_money', phone: ' 0712 345 678 ' }, label: ' Work ' }),
-    ).toEqual({ market_code: 'KE', method: { type: 'mobile_money', phone: '0712 345 678' }, label: 'Work' })
+      savePaymentMethodInputSchema.parse({ market_code: 'KE', method: { type: 'mobile_money', network: 'mpesa', phone: ' 0712 345 678 ' }, label: ' Work ' }),
+    ).toEqual({ market_code: 'KE', method: { type: 'mobile_money', network: 'mpesa', phone: '0712 345 678' }, label: 'Work' })
     expect(() => savePaymentMethodInputSchema.parse({ market_code: 'KE', method: { type: 'card' } })).toThrow()
     expect(() =>
-      savePaymentMethodInputSchema.parse({ market_code: 'KE', method: { type: 'mobile_money', phone: '0712345678' }, label: '' }),
+      savePaymentMethodInputSchema.parse({ market_code: 'KE', method: { type: 'mobile_money', network: 'mpesa', phone: '0712345678' }, label: '' }),
+    ).toThrow()
+  })
+
+  it('requires the network on a saved method and on save', () => {
+    expect(() =>
+      savedPaymentMethodEnvelopeSchema.parse({ data: { ...method, method: { type: 'mobile_money', phone: '+256772123456' } } }),
+    ).toThrow()
+    expect(() => savePaymentMethodInputSchema.parse({ market_code: 'KE', method: { type: 'mobile_money', phone: '0712345678' } })).toThrow()
+    expect(() =>
+      savePaymentMethodInputSchema.parse({ market_code: 'KE', method: { type: 'mobile_money', network: '', phone: '0712345678' } }),
     ).toThrow()
   })
 })
