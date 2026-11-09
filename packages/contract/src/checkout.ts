@@ -19,12 +19,24 @@ export const KENYAN_MSISDN = /^\+254\d{9}$/
  * The buyer-selected payment *method*. The client picks a method; the backend
  * picks the provider. `card` carries no fields — the backend obtains buyer
  * identity (e.g. email) itself; clients never submit provider credentials.
- * A mobile-money phone is E.164 in the order's market.
+ *
+ * Mobile money names the `network` (wallet) the buyer pays from, e.g. "mpesa" — one of the market's
+ * `mobile_money_networks` or a session descriptor's `network`. The prompt goes to that network only;
+ * it is never inferred from the number. The phone is E.164 in the order's market.
  */
-export type CheckoutPaymentMethod = { type: 'mobile_money'; phone: string } | { type: 'card' }
+export type CheckoutPaymentMethod =
+  | { type: 'mobile_money'; network: string; phone: string }
+  | { type: 'card' }
+
+/** The mobile-money method shape shared by every contract that sends or stores one. */
+export const mobileMoneyMethodSchema = z.object({
+  type: z.literal('mobile_money'),
+  network: z.string().min(1),
+  phone: z.string().regex(E164_PHONE),
+})
 
 export const checkoutPaymentMethodSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('mobile_money'), phone: z.string().regex(E164_PHONE) }),
+  mobileMoneyMethodSchema,
   z.object({ type: z.literal('card') }),
 ])
 

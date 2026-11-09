@@ -9,12 +9,9 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from 'react-native'
-import type {
-  CheckoutMethodDescriptor,
-  CheckoutInputField,
-  SessionPaymentMethod,
-} from '@mitumba/pay'
-import { normalizePhone } from '@mitumba/pay'
+import type { CheckoutInputField } from '@mitumba/pay'
+import { methodDescriptorKey } from '@mitumba/pay'
+import { descriptorPhone, sessionMethodFor } from './methods'
 import { payTheme as t } from './theme'
 import { formatMoney } from './formatMoney'
 import { unavailableMessage } from './unavailable'
@@ -64,17 +61,18 @@ export function MitumbaPaySessionSheet({
 }: MitumbaPaySessionSheetProps) {
   const { phase, context, error } = checkout
   const methods = context?.available_methods ?? []
-  const [selectedType, setSelectedType] = useState<string | null>(null)
+  // Keyed by type and network: mobile money is one descriptor per network (M-Pesa, Airtel Money…).
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
 
   // Default the selection to the first available method once context loads.
   useEffect(() => {
-    if (!selectedType && methods.length > 0) setSelectedType(methods[0]!.type)
-  }, [methods, selectedType])
+    if (!selectedKey && methods.length > 0) setSelectedKey(methodDescriptorKey(methods[0]!))
+  }, [methods, selectedKey])
 
   const selected = useMemo(
-    () => methods.find((m) => m.type === selectedType) ?? null,
-    [methods, selectedType],
+    () => methods.find((m) => methodDescriptorKey(m) === selectedKey) ?? null,
+    [methods, selectedKey],
   )
 
   const busy =
@@ -95,13 +93,15 @@ export function MitumbaPaySessionSheet({
   const requiredFields = selected?.input_fields.filter((f) => f.required) ?? []
   const fieldsComplete = requiredFields.every((f) => (fieldValues[f.name] ?? '').trim().length > 0)
   // A typed phone must be a number in the session's market (its field names the calling code).
-  const phoneInvalid = selected !== null && phoneOf(selected, fieldValues) === null
+  const phoneInvalid = selected !== null && descriptorPhone(selected, fieldValues) === null
+  // A method this SDK cannot build (e.g. mobile money without a network) is never submitted.
+  const unpayable = selected !== null && fieldsComplete && !phoneInvalid && sessionMethodFor(selected, fieldValues) === null
   const methodUnavailable = selected?.status === 'temporarily_unavailable'
-  const disabled = busy || done || !selected || methodUnavailable || !fieldsComplete || phoneInvalid
+  const disabled = busy || done || !selected || methodUnavailable || !fieldsComplete || phoneInvalid || unpayable
 
   const submit = () => {
     if (!selected) return
-    const method = buildMethod(selected, fieldValues)
+    const method = sessionMethodFor(selected, fieldValues)
     if (!method) return
     void checkout.pay(method, idempotencyKey())
   }
@@ -170,15 +170,16 @@ export function MitumbaPaySessionSheet({
               <>
                 <View style={styles.methods} accessibilityRole="radiogroup">
                   {methods.map((m) => {
-                    const active = m.type === selectedType
+                    const key = methodDescriptorKey(m)
+                    const active = key === selectedKey
                     const unavailable = m.status === 'temporarily_unavailable'
                     return (
                       <Pressable
-                        key={m.type}
+                        key={key}
                         accessibilityRole="radio"
                         accessibilityState={{ selected: active, disabled: unavailable }}
                         disabled={unavailable}
-                        onPress={() => setSelectedType(m.type)}
+                        onPress={() => setSelectedKey(key)}
                         style={[
                           styles.method,
                           active ? styles.methodActive : null,
@@ -289,23 +290,6 @@ function Outcome({ message, success, loading }: { message: string; success?: boo
       <Text style={styles.outcomeMessage}>{message}</Text>
     </View>
   )
-}
-
-/**
- * Build the typed SessionPaymentMethod from a descriptor + collected fields.
- * mobile_money requires a `phone` field; card carries no fields. Unknown method
- * types without a known shape return null (the UI should not guess).
- */
-function buildMethod(
-  descriptor: CheckoutMethodDescriptor,
-  values: Record<string, string>,
-): SessionPaymentMethod | null {
-  if (descriptor.type === 'card') return { type: 'card' }
-  if (descriptor.type === 'mobile_money') {
-    const phone = phoneOf(descriptor, values)
-    return phone ? { type: 'mobile_money', phone } : null
-  }
-  return null
 }
 
 const styles = StyleSheet.create({
@@ -455,15 +439,3 @@ const styles = StyleSheet.create({
   outcomeMessage: { maxWidth: 280, marginTop: 18, color: t.color.muted, fontSize: 13, lineHeight: 20, textAlign: 'center' },
 })
 
-/**
- * The descriptor's phone as E.164: normalized against the field's calling code when the session
- * supplies one (so `0712 345 678` works), otherwise taken as typed. Undefined when nothing is typed or
- * the method has no phone field; null when what was typed is not a number in the session's market.
- */
-function phoneOf(descriptor: CheckoutMethodDescriptor, values: Record<string, string>): string | null | undefined {
-  const field = descriptor.input_fields.find((f) => f.name === 'phone')
-  const raw = (values.phone ?? '').trim()
-  if (!field || raw === '') return undefined
-  if (!field.calling_code) return raw
-  return normalizePhone(raw, { callingCode: field.calling_code })
-}

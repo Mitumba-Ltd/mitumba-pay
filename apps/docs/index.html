@@ -38,6 +38,12 @@
         without an SDK release. Always follow <code>next_action</code>; never branch on a provider
         switch.
       </p>
+      <p>
+        Mobile money also names the <strong>network</strong> the buyer pays from (for example
+        <code>mpesa</code> or <code>airtel_money</code>, from the market's
+        <code>mobile_money_networks</code>). Ask the buyer; never guess it from the number, because
+        numbers move between networks. The payment prompt goes to that network only.
+      </p>
 
       <h2>Quick start</h2>
       <pre><code>import { MitumbaPay } from '@mitumba/pay'
@@ -47,7 +53,7 @@ const pay = new MitumbaPay({ token: () => getAccessToken() })
 const { next_action } = await pay.initiateCheckout({
   order_id: 'ord_123',
   idempotency_key: crypto.randomUUID(),
-  method: { type: 'mobile_money', phone: '+254712345678' },
+  method: { type: 'mobile_money', network: 'mpesa', phone: '+254712345678' },
 })
 
 if (next_action.type === 'redirect') {

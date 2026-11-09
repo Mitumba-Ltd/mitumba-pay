@@ -2,6 +2,7 @@ import type {
   WidgetLineItem,
   WidgetMetadataItem,
   WidgetMethod,
+  WidgetNetwork,
   WidgetSavedPhone,
 } from '@mitumba/pay-react'
 
@@ -26,6 +27,9 @@ export interface HostedCheckoutConfig {
   defaultPhone?: string
   savedPhones?: WidgetSavedPhone[]
   methods?: WidgetMethod[]
+  /** The market's mobile-money networks; the buyer picks one before the number. */
+  networks?: WidgetNetwork[]
+  defaultNetwork?: string
   supportLabel?: string
   supportHref?: string
   baseUrl?: string

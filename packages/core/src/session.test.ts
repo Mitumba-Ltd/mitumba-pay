@@ -28,6 +28,7 @@ describe('MitumbaPay sessions', () => {
             currency: { code: 'KES', minor_unit: 2, symbol: 'KSh', locale: 'en-KE' },
             calling_code: '+254',
             supported_methods: ['mobile_money', 'card'],
+            mobile_money_networks: [{ id: 'mpesa', name: 'M-Pesa' }, { id: 'airtel_money', name: 'Airtel Money' }],
           },
         ],
       }),
@@ -35,6 +36,7 @@ describe('MitumbaPay sessions', () => {
     const pay = new MitumbaPay({ fetch: fetchImpl })
     const res = await pay.listMarkets()
     expect(res.markets[0]?.code).toBe('KE')
+    expect(res.markets[0]?.mobile_money_networks.map((network) => network.id)).toEqual(['mpesa', 'airtel_money'])
     expect(fetchImpl.mock.calls[0]![0]).toBe('https://api.mitumba.africa/pay/markets')
   })
 
@@ -101,7 +103,7 @@ describe('MitumbaPay sessions', () => {
     const pay = new MitumbaPay({ fetch: fetchImpl })
     const attempt = await pay.createAttempt('cs_1', 'csec_1', {
       idempotency_key: 'intent_1',
-      method: { type: 'mobile_money', phone: '+254712345678' },
+      method: { type: 'mobile_money', network: 'mpesa', phone: '+254712345678' },
     })
     expect(attempt.next_action?.type).toBe('await_confirmation')
     const call = fetchImpl.mock.calls[0]!
@@ -115,7 +117,7 @@ describe('MitumbaPay sessions', () => {
     await expect(
       pay.createAttempt('cs_1', 'csec_1', {
         idempotency_key: 'intent_1',
-        method: { type: 'mobile_money', phone: '0712345678' },
+        method: { type: 'mobile_money', network: 'mpesa', phone: '0712345678' },
       }),
     ).rejects.toThrow()
     expect(fetchImpl).not.toHaveBeenCalled()

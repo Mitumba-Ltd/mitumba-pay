@@ -12,6 +12,8 @@ npm install @mitumba/pay-react @mitumba/pay react react-dom
 - **Desktop:** green order-summary panel + white payment-method panel.
 - **Mobile:** amount hero + rounded white action sheet; no squeezed columns.
 - Method tabs select `mobile_money` or `card`, never a provider.
+- Mobile money asks which network the number pays from (`networks`, e.g. the market's
+  `mobile_money_networks`) before the number. The prompt goes to that network only.
 - Card details are entered on the backend-supplied secure redirect. This widget never
   collects or stores PAN/CVV.
 
@@ -32,12 +34,13 @@ function Checkout({ orderId, token }: { orderId: string; token: string }) {
       ]}
       // The market's phone rules, from your market registry (never hardcode a country).
       phoneFormat={{ callingCode: market.phone.calling_code, nationalLength: market.phone.national_length, example: market.phone.example }}
+      networks={market.mobile_money_networks}
       defaultPhone="+254712345678"
-      onPay={({ method, phone }) => checkout.start({
+      onPay={(input) => checkout.start({
         order_id: orderId,
         idempotency_key: crypto.randomUUID(),
-        method: method === 'mobile_money'
-          ? { type: 'mobile_money', phone: phone! }
+        method: input.method === 'mobile_money'
+          ? { type: 'mobile_money', network: input.network, phone: input.phone }
           : { type: 'card' },
       })}
     />

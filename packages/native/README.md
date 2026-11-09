@@ -25,13 +25,14 @@ function Checkout({ visible, orderId, token, onClose }) {
       lineItems={[{ label: 'Delivery', value: 'KES 150.00' }]}
       // The market's phone rules, from your market registry (never hardcode a country).
       phoneFormat={{ callingCode: market.phone.calling_code, nationalLength: market.phone.national_length, example: market.phone.example }}
+      networks={market.mobile_money_networks}
       defaultPhone="+254712345678"
       onClose={onClose}
-      onPay={({ method = 'mobile_money', phone } = {}) => checkout.start({
+      onPay={(input) => checkout.start({
         order_id: orderId,
         idempotency_key: `${orderId}:${Date.now()}`,
-        method: method === 'mobile_money'
-          ? { type: 'mobile_money', phone: phone! }
+        method: input.method === 'mobile_money'
+          ? { type: 'mobile_money', network: input.network, phone: input.phone }
           : { type: 'card' },
       })}
     />
@@ -44,6 +45,8 @@ function Checkout({ visible, orderId, token, onClose }) {
 - Green amount/order hero preserves checkout context.
 - Rounded, scroll-safe white action sheet keeps controls in the thumb zone.
 - Large method cards select a method only, never a provider.
+- Mobile money asks which network the number pays from before the number; the session sheet lists
+  one method per network, as the session returns them.
 - Dedicated STK waiting, success, error, and retry states.
 - Card checkout explains the secure redirect; raw card details never enter this package.
 

@@ -11,7 +11,10 @@ export type {
   MitumbaPaySheetProps,
   NativePaymentMethod,
   NativeLineItem,
+  NativePayInput,
 } from './MitumbaPaySheet'
+export { descriptorPhone, initialNetwork, isNetworkPayable, sessionMethodFor } from './methods'
+export type { NativeNetwork } from './methods'
 
 // Session-driven checkout (RFC 0001).
 export { useCheckoutSession } from './useCheckoutSession'
@@ -45,6 +48,9 @@ export type {
   SavedPaymentMethodsResponse,
   SavePaymentMethodInput,
   SavedPhoneChoice,
+  CheckoutMethodDescriptor,
+  MobileMoneyNetwork,
+  Market,
 } from '@mitumba/pay'
 
-export { savedPhoneChoices } from '@mitumba/pay'
+export { methodDescriptorKey, savedPhoneChoices } from '@mitumba/pay'

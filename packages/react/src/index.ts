@@ -26,6 +26,8 @@ export type {
   WidgetLineItem,
   WidgetMetadataItem,
   WidgetSavedPhone,
+  WidgetNetwork,
+  WidgetPayInput,
 } from './components'
 export { payTheme } from './theme'
 export { unavailableMessage } from './unavailable'
@@ -74,6 +76,8 @@ export type {
   SavedPaymentMethodsResponse,
   SavePaymentMethodInput,
   SavedPhoneChoice,
+  MobileMoneyNetwork,
+  Market,
 } from '@mitumba/pay'
 
-export { savedPhoneChoices } from '@mitumba/pay'
+export { methodDescriptorKey, savedPhoneChoices } from '@mitumba/pay'

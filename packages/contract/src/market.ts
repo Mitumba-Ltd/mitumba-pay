@@ -55,10 +55,31 @@ export const marketCurrencySchema = z.object({
 })
 
 /**
+ * A mobile-money network: the wallet a buyer pays from, e.g. M-Pesa, Airtel Money, MTN MoMo.
+ *
+ * The buyer chooses the network, because it decides where the payment prompt is sent and a number's
+ * prefix cannot tell it reliably (numbers move between networks). The backend then chooses a provider
+ * that reaches that network (the network's own API or an aggregator) and never sends a payment to
+ * another network. Ids are open strings, so a new network needs no SDK release.
+ */
+export interface MobileMoneyNetwork {
+  /** Stable lowercase id used on the wire, e.g. "mpesa", "airtel_money". */
+  id: string
+  /** Display name, e.g. "M-Pesa". */
+  name: string
+}
+
+export const mobileMoneyNetworkSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+})
+
+/**
  * A market the platform exposes. `code` and `supported_methods` are open
  * strings so adding a country never requires an SDK release. `supported_methods`
- * is informational ("generally supported here"); only a checkout session's
- * `available_methods` is authoritative for a specific payment.
+ * and `mobile_money_networks` are informational ("generally supported here");
+ * only a checkout session's `available_methods` is authoritative for a specific
+ * payment.
  */
 export interface Market {
   /** ISO 3166-1 alpha-2, e.g. "KE". */
@@ -71,6 +92,8 @@ export interface Market {
   calling_code: string
   /** Informational — not checkout authority. */
   supported_methods: PaymentMethodType[]
+  /** The wallets a buyer can pay from here, in display order. Informational — not checkout authority. */
+  mobile_money_networks: MobileMoneyNetwork[]
 }
 
 export const marketSchema = z.object({
@@ -80,6 +103,8 @@ export const marketSchema = z.object({
   currency: marketCurrencySchema,
   calling_code: z.string().regex(/^\+\d{1,4}$/),
   supported_methods: z.array(paymentMethodTypeSchema),
+  // A backend from before networks omits the field; read that as "none listed".
+  mobile_money_networks: z.array(mobileMoneyNetworkSchema).default([]),
 })
 
 /** Response of `GET /pay/markets` — public, cacheable market discovery. */

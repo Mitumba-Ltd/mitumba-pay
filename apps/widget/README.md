@@ -31,6 +31,11 @@ window.addEventListener('message', (event) => {
         token: await getShortLivedAccessToken(),
         amountLabel: 'KES 6,000.00',
         lineItems: [{ label: 'Delivery', value: 'KES 150.00' }],
+        // The market's mobile-money networks: the buyer picks one before the number.
+        networks: [
+          { id: 'mpesa', name: 'M-Pesa' },
+          { id: 'airtel_money', name: 'Airtel Money' },
+        ],
         defaultPhone: '+254712345678',
       },
     }, 'https://pay.mitumba.africa')

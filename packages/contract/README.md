@@ -15,9 +15,13 @@ the **provider** (Daraja, Airtel, Paystack, …). `ProviderId` is an *open* unio
 the backend can add a new provider and return it as metadata without any SDK release.
 Never branch on an exhaustive provider switch; follow `next_action` instead.
 
+Mobile money also names the **network** the buyer pays from (mpesa, irtel_money, … from the market's mobile_money_networks, or a session descriptor's 
+etwork). Ask the buyer; never infer it from the number, because numbers move between networks. The backend sends the prompt to that network only, through whichever provider reaches it.
+
 ## Exports
 
 - `initiateCheckoutInputSchema` / `InitiateCheckoutInput`
+- `mobileMoneyMethodSchema`, `MobileMoneyNetwork`, `Market.mobile_money_networks`, `methodDescriptorKey`
 - `initiateCheckoutResponseSchema` / `InitiateCheckoutResponse`
 - `checkoutStatusResponseSchema` / `CheckoutStatusResponse`
 - `ProviderId`, `KnownPaymentProvider`, `KNOWN_PAYMENT_PROVIDERS`

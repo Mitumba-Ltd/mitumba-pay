@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MitumbaGlass, MitumbaPrimaryButton, MitumbaThemeProvider } from '@mitumba/ui'
 import {
   formatMoney,
+  methodDescriptorKey,
   normalizePhone,
   unavailableMessage,
   useCheckoutSession,
@@ -67,7 +68,8 @@ function SessionCheckout({
   const config = useMemo(() => ({ baseUrl: undefined }), [])
   const checkout = useCheckoutSession(config, sessionId, clientSecret)
   const idempotencyKey = useRef<string>(crypto.randomUUID())
-  const [selectedType, setSelectedType] = useState<string | null>(null)
+  // Keyed by type and network: mobile money is one descriptor per network (M-Pesa, Airtel Money…).
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
 
   // Load the authoritative context once on mount.
@@ -78,8 +80,8 @@ function SessionCheckout({
 
   const methods = checkout.context?.available_methods ?? []
   useEffect(() => {
-    if (!selectedType && methods.length > 0) setSelectedType(methods[0]!.type)
-  }, [methods, selectedType])
+    if (!selectedKey && methods.length > 0) setSelectedKey(methodDescriptorKey(methods[0]!))
+  }, [methods, selectedKey])
 
   // Relay lifecycle to the parent; emit COMPLETE on paid.
   useEffect(() => {
@@ -94,7 +96,7 @@ function SessionCheckout({
 
   const close = useCallback(() => postToParent(parentOrigin, CHILD_MESSAGE.close), [parentOrigin])
 
-  const selected = methods.find((m) => m.type === selectedType) ?? null
+  const selected = methods.find((m) => methodDescriptorKey(m) === selectedKey) ?? null
   const requiredFields = selected?.input_fields.filter((f) => f.required) ?? []
   const fieldsComplete = requiredFields.every((f) => (fieldValues[f.name] ?? '').trim().length > 0)
   const busy =
@@ -105,13 +107,12 @@ function SessionCheckout({
     checkout.phase === 'awaiting_confirmation'
   const done = checkout.phase === 'paid'
   const methodUnavailable = selected?.status === 'temporarily_unavailable'
-  const disabled = busy || done || !selected || methodUnavailable || !fieldsComplete
+  // Null until the input is complete and valid, or when the method cannot be paid from here.
+  const method = selected ? buildMethod(selected, fieldValues) : null
+  const disabled = busy || done || !selected || methodUnavailable || !fieldsComplete || method === null
 
   const submit = () => {
-    if (!selected) return
-    const method = buildMethod(selected, fieldValues)
-    if (!method) return
-    void checkout.pay(method, idempotencyKey.current)
+    if (method) void checkout.pay(method, idempotencyKey.current)
   }
 
   const amountLabel = checkout.context
@@ -144,17 +145,18 @@ function SessionCheckout({
               <>
                 <div role="radiogroup" aria-label="Payment method" style={{ marginTop: 18, display: 'grid', gap: 8 }}>
                   {methods.map((m) => {
-                    const active = m.type === selectedType
+                    const key = methodDescriptorKey(m)
+                    const active = key === selectedKey
                     const unavailable = m.status === 'temporarily_unavailable'
                     return (
                       <button
-                        key={m.type}
+                        key={key}
                         type="button"
                         role="radio"
                         aria-checked={active}
                         aria-disabled={unavailable}
                         disabled={unavailable}
-                        onClick={() => setSelectedType(m.type)}
+                        onClick={() => setSelectedKey(key)}
                         style={methodStyle(active, unavailable)}
                       >
                         <span>{m.display_name}</span>
@@ -204,19 +206,22 @@ function SessionCheckout({
   )
 }
 
-/** Map a method descriptor + collected fields into the typed SessionPaymentMethod. */
+/**
+ * Map a method descriptor + collected fields into the typed SessionPaymentMethod. Mobile money is sent
+ * to the descriptor's network only; without one it is not payable, never guessed.
+ */
 function buildMethod(
   descriptor: CheckoutMethodDescriptor,
   values: Record<string, string>,
 ): SessionPaymentMethod | null {
   if (descriptor.type === 'card') return { type: 'card' }
-  if (descriptor.type === 'mobile_money') {
+  if (descriptor.type === 'mobile_money' && descriptor.network) {
     const raw = (values.phone ?? '').trim()
     if (!raw) return null
     // Normalize against the session's calling code so a local form (0712 345 678) is accepted.
     const callingCode = descriptor.input_fields.find((f) => f.name === 'phone')?.calling_code
     const phone = callingCode ? normalizePhone(raw, { callingCode }) : raw
-    return phone ? { type: 'mobile_money', phone } : null
+    return phone ? { type: 'mobile_money', network: descriptor.network, phone } : null
   }
   return null
 }
