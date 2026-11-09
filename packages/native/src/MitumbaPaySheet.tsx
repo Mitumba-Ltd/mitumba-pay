@@ -13,9 +13,18 @@ import { payTheme as t } from './theme'
 import { type UseCheckoutResult, type CheckoutPhase } from './useCheckout'
 import { isValidPhone, nationalPart, normalizePhone, type PhoneFormat } from '@mitumba/pay'
 import { unavailableMessage } from './unavailable'
+import { initialNetwork, isNetworkPayable, type NativeNetwork } from './methods'
 
 export type NativePaymentMethod = 'mobile_money' | 'card'
 export interface NativeLineItem { label: string; value: string }
+
+/** What the sheet submits. Mobile money always names its network; send it as the method's `network`. */
+export type NativePayInput =
+  | { method: 'mobile_money'; network: string; phone: string }
+  | { method: 'card' }
+
+/** A stable empty default, so effects keyed on `networks` do not rerun every render. */
+const NO_NETWORKS: NativeNetwork[] = []
 
 /** Any E.164 number; used only when the host supplies no market phone format. */
 const E164 = /^\+[1-9]\d{4,14}$/
@@ -37,13 +46,21 @@ const PHASE_MESSAGE: Record<CheckoutPhase, string> = {
 export interface MitumbaPaySheetProps {
   visible: boolean
   checkout: UseCheckoutResult
-  onPay: (input?: { method: NativePaymentMethod; phone?: string }) => void
+  onPay: (input: NativePayInput) => void
   onClose: () => void
   amountLabel?: string
   title?: string
   orderId?: string
   lineItems?: NativeLineItem[]
   methods?: NativePaymentMethod[]
+  /**
+   * The mobile-money networks offered here, in display order, e.g. the market's
+   * `mobile_money_networks`. The buyer picks one before entering their number, because the payment
+   * prompt goes to that network only. With none, mobile money cannot be paid.
+   */
+  networks?: NativeNetwork[]
+  /** The network to preselect, e.g. the buyer's default saved number's. Defaults to the first available. */
+  defaultNetwork?: string
   /** An E.164 number to prefill, e.g. the buyer's saved number. */
   defaultPhone?: string
   /**
@@ -69,14 +86,21 @@ export function MitumbaPaySheet({
   orderId,
   lineItems = [],
   methods = ['mobile_money', 'card'],
+  networks = NO_NETWORKS,
+  defaultNetwork,
   defaultPhone = '',
   phoneFormat,
 }: MitumbaPaySheetProps) {
   const [method, setMethod] = useState<NativePaymentMethod>(methods[0] ?? 'mobile_money')
+  const [network, setNetwork] = useState<string | null>(() => initialNetwork(networks, defaultNetwork))
   const [phone, setPhone] = useState(defaultPhone)
   const { phase, error } = checkout
 
   useEffect(() => setPhone(defaultPhone), [defaultPhone])
+  // Keep the choice on a network that is still offered and available; otherwise fall back.
+  useEffect(() => {
+    if (!isNetworkPayable(networks, network)) setNetwork(initialNetwork(networks, defaultNetwork))
+  }, [networks, network, defaultNetwork])
   const busy = phase === 'initiating' || phase === 'polling' || phase === 'redirecting' || phase === 'awaiting_confirmation'
   const done = phase === 'paid'
   const failed = phase === 'failed' || phase === 'retryable' || phase === 'error' || phase === 'unavailable'
@@ -91,7 +115,12 @@ export function MitumbaPaySheet({
   const validPhone = phoneFormat ? isValidPhone(phone, phoneFormat) : payablePhone !== null
   const shownPhone = phoneFormat ? nationalPart(phone, phoneFormat) : phone
   const placeholder = phoneFormat?.example ? nationalPart(phoneFormat.example, phoneFormat) : '+'
-  const disabled = busy || done || (method === 'mobile_money' && !validPhone)
+  const selectedNetwork = networks.find((item) => item.id === network && item.available !== false) ?? null
+  const disabled = busy || done || (method === 'mobile_money' && (!validPhone || payablePhone === null || selectedNetwork === null))
+  const pay = () => {
+    if (method === 'card') onPay({ method })
+    else if (selectedNetwork && payablePhone) onPay({ method, network: selectedNetwork.id, phone: payablePhone })
+  }
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -148,9 +177,31 @@ export function MitumbaPaySheet({
                   })}
                 </View>
 
-                {method === 'mobile_money' ? (
+                {method === 'mobile_money' && networks.length === 0 ? (
+                  <View style={styles.cardNote}><Text style={styles.cardNoteText}>Mobile money isn’t available for this payment. Please choose another method.</Text></View>
+                ) : method === 'mobile_money' ? (
                   <View style={styles.fieldGroup}>
-                    <Text style={styles.fieldLabel}>Mobile number</Text>
+                    <Text style={styles.fieldLabel}>Pay from</Text>
+                    <View style={styles.networks} accessibilityRole="radiogroup" accessibilityLabel="Mobile money network">
+                      {networks.map((item) => {
+                        const active = item.id === network
+                        const unavailable = item.available === false
+                        return (
+                          <Pressable
+                            key={item.id}
+                            accessibilityRole="radio"
+                            accessibilityState={{ selected: active, disabled: unavailable }}
+                            disabled={unavailable}
+                            onPress={() => setNetwork(item.id)}
+                            style={[styles.network, active ? styles.networkActive : null, unavailable ? styles.networkDisabled : null]}
+                          >
+                            <Text style={[styles.networkText, active ? styles.networkTextActive : null]}>{item.name}</Text>
+                            {unavailable ? <Text style={styles.methodHint}>Temporarily unavailable</Text> : null}
+                          </Pressable>
+                        )
+                      })}
+                    </View>
+                    <Text style={[styles.fieldLabel, styles.numberLabel]}>{selectedNetwork ? ` number` : 'Mobile number'}</Text>
                     <View style={[styles.inputWrap, phone.length > 0 && !validPhone ? styles.inputError : null]}>
                       {phoneFormat ? <Text style={styles.country}>{phoneFormat.callingCode}</Text> : null}
                       <TextInput
@@ -165,7 +216,7 @@ export function MitumbaPaySheet({
                       />
                       {validPhone ? <Text style={styles.valid}>✓</Text> : null}
                     </View>
-                    <Text style={[styles.help, phone.length > 0 && !validPhone ? styles.helpError : null]}>{phone.length > 0 && !validPhone ? 'Enter a valid mobile number' : 'A secure prompt will appear on your phone.'}</Text>
+                    <Text style={[styles.help, phone.length > 0 && !validPhone ? styles.helpError : null]}>{phone.length > 0 && !validPhone ? 'Enter a valid mobile number' : selectedNetwork ? `A secure  prompt will appear on this phone.` : 'Choose the network your number pays from.'}</Text>
                   </View>
                 ) : (
                   <View style={styles.cardNote}><Text style={styles.cardNoteIcon}>▤</Text><Text style={styles.cardNoteText}>You’ll continue to a secure, PCI-compliant card page. Mitumba never stores your card number.</Text></View>
@@ -177,7 +228,7 @@ export function MitumbaPaySheet({
                   accessibilityRole="button"
                   accessibilityState={{ busy, disabled }}
                   disabled={disabled}
-                  onPress={() => onPay(method === 'mobile_money' ? { method, phone: payablePhone ?? phone } : { method })}
+                  onPress={pay}
                   style={[styles.payButton, disabled ? styles.payButtonDisabled : null]}
                 >
                   <Text style={styles.payButtonText}>{failed ? 'Try again' : `Pay ${amountLabel}`}</Text>
@@ -235,6 +286,13 @@ const styles = StyleSheet.create({
   radioActive: { borderColor: t.color.green },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: t.color.green },
   fieldGroup: { marginTop: 20 },
+  networks: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  network: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, backgroundColor: t.color.surface },
+  networkActive: { borderColor: t.color.green, backgroundColor: t.color.greenSoft },
+  networkDisabled: { opacity: 0.5 },
+  networkText: { color: t.color.ink, fontSize: 14, fontWeight: '600' },
+  networkTextActive: { color: t.color.greenDark },
+  numberLabel: { marginTop: 16 },
   fieldLabel: { color: t.color.muted, fontSize: 12, marginBottom: 7 },
   inputWrap: { minHeight: 52, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: t.color.border, borderRadius: t.radius.md, backgroundColor: t.color.field, paddingHorizontal: 13 },
   inputError: { borderColor: t.color.danger },
