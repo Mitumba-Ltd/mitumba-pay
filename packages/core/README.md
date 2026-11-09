@@ -57,6 +57,20 @@ const final = await pay.pollCheckoutStatus('ord_123', {
 
 `PayError` carries `status`, `code` and, on 503 or 429, `retryAfterMs` from `Retry-After`. `isUnavailable` is true on 503 (`payment_initiation_paused`, `payment_provider_unavailable`): nothing was charged, so retry later. A GET never waits less than the server asked, and a 503 that names a long wait is surfaced at once.
 
+## Saved payment methods
+
+The buyer's own mobile-money numbers, per market, as one-tap choices at checkout:
+
+```ts
+const { data } = await pay.paymentMethods.list('KE') // default first
+await pay.paymentMethods.save({ market_code: 'KE', method: { type: 'mobile_money', phone: '0712 345 678' } })
+await pay.paymentMethods.setDefault(id)
+await pay.paymentMethods.remove(id)
+const choices = savedPhoneChoices(data) // [{ label: 'Main ••• 678', value: '+254712345678', is_default: true }]
+```
+
+Pass a saved method's `method` to `initiateCheckout` or `createAttempt` unchanged. Saving a number that is already saved returns the existing entry instead of a duplicate. Cards cannot be saved (`422 payment_method_not_savable`) until a provider issues reusable tokens.
+
 ## License
 
 MIT

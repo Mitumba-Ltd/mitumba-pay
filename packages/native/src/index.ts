@@ -41,4 +41,10 @@ export type {
   SessionPaymentMethod,
   Money,
   PhoneFormat,
+  SavedPaymentMethod,
+  SavedPaymentMethodsResponse,
+  SavePaymentMethodInput,
+  SavedPhoneChoice,
 } from '@mitumba/pay'
+
+export { savedPhoneChoices } from '@mitumba/pay'
