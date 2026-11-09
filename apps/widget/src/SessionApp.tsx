@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MitumbaGlass, MitumbaPrimaryButton, MitumbaThemeProvider } from '@mitumba/ui'
 import {
+  formatMoney,
+  normalizePhone,
+  unavailableMessage,
   useCheckoutSession,
   type CheckoutMethodDescriptor,
   type SessionPaymentMethod,
@@ -112,11 +115,7 @@ function SessionCheckout({
   }
 
   const amountLabel = checkout.context
-    ? formatAmount(
-        checkout.context.amount.minor_units,
-        checkout.context.amount.currency,
-        checkout.context.market.code,
-      )
+    ? formatMoney(checkout.context.amount)
     : ''
 
   return (
@@ -183,9 +182,15 @@ function SessionCheckout({
                     ))
                   : null}
 
+                {checkout.phase === 'unavailable' ? (
+                  <p role="alert" style={{ marginTop: 16, color: '#7A5B00' }}>
+                    {unavailableMessage(checkout.error?.retryAfterMs)}
+                  </p>
+                ) : null}
+
                 <div style={{ marginTop: 20 }}>
                   <MitumbaPrimaryButton
-                    label={busy ? 'Processing…' : amountLabel ? `Pay ${amountLabel}` : 'Pay'}
+                    label={busy ? 'Processing…' : checkout.phase === 'unavailable' ? 'Try again' : amountLabel ? `Pay ${amountLabel}` : 'Pay'}
                     disabled={disabled}
                     onClick={submit}
                   />
@@ -206,22 +211,14 @@ function buildMethod(
 ): SessionPaymentMethod | null {
   if (descriptor.type === 'card') return { type: 'card' }
   if (descriptor.type === 'mobile_money') {
-    const phone = (values.phone ?? '').trim()
+    const raw = (values.phone ?? '').trim()
+    if (!raw) return null
+    // Normalize against the session's calling code so a local form (0712 345 678) is accepted.
+    const callingCode = descriptor.input_fields.find((f) => f.name === 'phone')?.calling_code
+    const phone = callingCode ? normalizePhone(raw, { callingCode }) : raw
     return phone ? { type: 'mobile_money', phone } : null
   }
   return null
-}
-
-function formatAmount(minorUnits: number, currency: string, marketCode: string): string {
-  const major = minorUnits / 100
-  try {
-    return new Intl.NumberFormat(marketCode === 'KE' ? 'en-KE' : undefined, {
-      style: 'currency',
-      currency,
-    }).format(major)
-  } catch {
-    return `${currency} ${major.toFixed(2)}`
-  }
 }
 
 const closeStyle: React.CSSProperties = {
