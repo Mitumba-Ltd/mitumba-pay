@@ -26,6 +26,8 @@ export type SessionPhase =
   | 'failed'
   | 'retryable'
   | 'timeout'
+  /** Payments are temporarily unavailable (HTTP 503: paused, or the provider is down). Nothing was charged; retry later. */
+  | 'unavailable'
   | 'error'
 
 export interface UseCheckoutSessionState {
@@ -91,6 +93,12 @@ export function useCheckoutSession(
     })
   }, [])
 
+  /** A 503 is 'unavailable' (retry later); anything else is an 'error'. */
+  const failureOf = (error: PayError): Pick<UseCheckoutSessionState, 'phase' | 'error'> => ({
+    phase: error.isUnavailable ? 'unavailable' : 'error',
+    error,
+  })
+
   const loadContext = useCallback(async () => {
     cancel()
     const controller = new AbortController()
@@ -103,7 +111,7 @@ export function useCheckoutSession(
       setState((s) => ({ ...s, phase: 'ready', context }))
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
-      setState((s) => ({ ...s, phase: 'error', error: toError(err) }))
+      setState((s) => ({ ...s, ...failureOf(toError(err)) }))
     }
   }, [client, sessionId, clientSecret, cancel, toError])
 
@@ -147,7 +155,7 @@ export function useCheckoutSession(
         }))
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return
-        setState((s) => ({ ...s, phase: 'error', error: toError(err) }))
+        setState((s) => ({ ...s, ...failureOf(toError(err)) }))
       }
     },
     [client, sessionId, clientSecret, cancel, toError],

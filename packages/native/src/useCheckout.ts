@@ -18,6 +18,8 @@ export type CheckoutPhase =
   | 'failed'
   | 'retryable'
   | 'timeout'
+  /** Payments are temporarily unavailable (HTTP 503: paused, or the provider is down). Nothing was charged; retry later. */
+  | 'unavailable'
   | 'error'
 
 export interface UseCheckoutState {
@@ -96,7 +98,7 @@ export function useCheckout(config: MitumbaPayConfig | MitumbaPay): UseCheckoutR
         const payError = err instanceof PayError ? err : null
         setState((s) => ({
           ...s,
-          phase: 'error',
+          phase: payError?.isUnavailable ? 'unavailable' : 'error',
           error:
             payError ??
             new PayError(0, {
