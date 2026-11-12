@@ -19,13 +19,15 @@ import { type CheckoutNextAction, checkoutNextActionSchema, mobileMoneyMethodSch
 // ---------------------------------------------------------------------------
 
 /**
- * The subject a checkout session is created for. Today only marketplace orders;
- * `type` is a discriminant so external-merchant subjects can be added later.
+ * The subject a checkout session is created for: one marketplace order, or one checkout holding
+ * several shops' orders paid with a single payment. `type` is a discriminant so external-merchant
+ * subjects can be added later.
  */
-export type CheckoutSessionSource = { type: 'order'; id: string }
+export type CheckoutSessionSource = { type: 'order'; id: string } | { type: 'checkout'; id: string }
 
 export const checkoutSessionSourceSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('order'), id: z.string().min(1) }),
+  z.object({ type: z.literal('checkout'), id: z.string().min(1) }),
 ])
 
 /**
