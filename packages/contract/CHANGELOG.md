@@ -1,5 +1,11 @@
 # @mitumba/pay-contract
 
+## 0.6.0
+
+### Minor Changes
+
+- 9317443: A checkout session can be created for a checkout holding several shops' orders: `source: { type: 'checkout', id }`, alongside `{ type: 'order', id }`.
+
 ## 0.5.0
 
 ### Minor Changes

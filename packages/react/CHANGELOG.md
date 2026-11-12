@@ -1,5 +1,11 @@
 # @mitumba/pay-react
 
+## 0.9.1
+
+### Patch Changes
+
+- @mitumba/pay@0.5.1
+
 ## 0.9.0
 
 ### Minor Changes

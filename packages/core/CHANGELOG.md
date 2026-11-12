@@ -1,5 +1,12 @@
 # @mitumba/pay
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies [9317443]
+  - @mitumba/pay-contract@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes
