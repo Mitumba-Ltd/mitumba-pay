@@ -30,6 +30,20 @@ describe('checkout session creation', () => {
     expect(parsed.return_url).toBeUndefined()
   })
 
+  it('accepts a checkout-sourced creation input: one payment for several shops', () => {
+    const parsed = createCheckoutSessionInputSchema.parse({
+      source: { type: 'checkout', id: 'co_123' },
+      parent_origin: 'https://marketplace.example',
+    })
+    expect(parsed.source).toEqual({ type: 'checkout', id: 'co_123' })
+  })
+
+  it('rejects an unknown source type and an empty source id', () => {
+    for (const source of [{ type: 'invoice', id: 'inv_1' }, { type: 'checkout', id: '' }]) {
+      expect(() => createCheckoutSessionInputSchema.parse({ source, parent_origin: 'https://marketplace.example' })).toThrow()
+    }
+  })
+
   it('rejects a non-url parent origin', () => {
     expect(() =>
       createCheckoutSessionInputSchema.parse({
