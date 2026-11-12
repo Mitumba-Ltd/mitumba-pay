@@ -1,5 +1,12 @@
 # @mitumba/pay-react
 
+## 0.9.2
+
+### Patch Changes
+
+- Updated dependencies [4000de0]
+  - @mitumba/pay@0.5.2
+
 ## 0.9.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @mitumba/pay
 
+## 0.5.2
+
+### Patch Changes
+
+- 4000de0: Call the default `fetch` on the global object. The client stored `globalThis.fetch` and called it as a method of itself, which browsers and Workers reject with `TypeError: Illegal invocation`, so every request without a custom `fetch` failed as a network error.
+
 ## 0.5.1
 
 ### Patch Changes
