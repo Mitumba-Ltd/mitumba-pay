@@ -121,3 +121,27 @@ describe('pollCheckoutStatus', () => {
     expect(fetchStatus).not.toHaveBeenCalled()
   })
 })
+
+describe('the default fetch', () => {
+  it('is called on the global object, as browsers and Workers require', async () => {
+    // A browser's fetch throws "Illegal invocation" unless it is called on the window.
+    const receivers: unknown[] = []
+    const strictFetch = vi.fn(function (this: unknown) {
+      receivers.push(this)
+      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation')
+      return Promise.resolve(jsonResponse({ error: 'order_not_payable' }, 409))
+    })
+    vi.stubGlobal('fetch', strictFetch)
+    try {
+      // The request reached the server: its answer comes back, not a network error.
+      await expect(new MitumbaPay({ maxRetries: 0 }).getCheckoutStatus('ord_1')).rejects.toMatchObject({
+        code: 'order_not_payable',
+        status: 409,
+      })
+      expect(strictFetch).toHaveBeenCalledTimes(1)
+      expect(receivers.every((receiver) => receiver === undefined || receiver === globalThis)).toBe(true)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})

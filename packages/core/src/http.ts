@@ -20,7 +20,9 @@ export class HttpClient {
   constructor(config: MitumbaPayConfig = {}) {
     this.baseUrl = stripTrailingSlashes(config.baseUrl ?? DEFAULT_BASE_URL)
     this.maxRetries = config.maxRetries ?? 3
-    this.fetchImpl = config.fetch ?? globalThis.fetch
+    // Never store the global fetch itself: called as this.fetchImpl(...), a browser or Workers
+    // fetch whose receiver is not the global object throws `Illegal invocation`.
+    this.fetchImpl = config.fetch ?? ((input, init) => globalThis.fetch(input, init))
     this.debug = config.debug ?? false
     this.tokenSource = config.token
     if (typeof this.fetchImpl !== 'function') {
