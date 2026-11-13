@@ -40,6 +40,11 @@ describe('openMitumbaPay', () => {
     expect(src.searchParams.get('parent_origin')).toBe(window.location.origin)
     // The client secret is never placed in the URL.
     expect(iframe.src).not.toContain('csec_1')
+    // Light scheme like the widget (a mismatched scheme makes the frame opaque) over a dimmed, blurred page.
+    expect(iframe.style.colorScheme).toBe('light')
+    expect(iframe.style.background).toBe('transparent')
+    const overlay = document.getElementById('mitumba-pay-overlay')!
+    expect(overlay.style.background).toContain('rgba(16, 24, 18, 0.45)')
     expect(document.body.style.overflow).toBe('hidden')
     // settle to avoid a dangling promise
     messageFromWidget(iframe, MITUMBA_PAY_MESSAGE.close)

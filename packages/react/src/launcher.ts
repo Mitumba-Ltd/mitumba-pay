@@ -80,13 +80,20 @@ export function openMitumbaPay(options: OpenMitumbaPayOptions): Promise<MitumbaP
     overlay.setAttribute('role', 'dialog')
     overlay.setAttribute('aria-modal', 'true')
     overlay.setAttribute('aria-label', 'Mitumba Pay secure checkout')
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
     Object.assign(overlay.style, {
       position: 'fixed',
       inset: '0',
       zIndex: '2147483647',
       border: '0',
-      background: 'rgba(16, 24, 18, 0.55)',
+      // A scrim over the store page: the page stays visible behind it, dimmed and softly blurred.
+      background: 'rgba(16, 24, 18, 0.45)',
+      backdropFilter: 'blur(6px)',
+      opacity: reduceMotion ? '1' : '0',
+      transition: reduceMotion ? '' : 'opacity 180ms ease-out',
     } satisfies Partial<CSSStyleDeclaration>)
+    // Safari before 18 only knows the prefixed property.
+    overlay.style.setProperty('-webkit-backdrop-filter', 'blur(6px)')
 
     const iframe = document.createElement('iframe')
     const src = new URL(widgetUrl)
@@ -101,10 +108,15 @@ export function openMitumbaPay(options: OpenMitumbaPayOptions): Promise<MitumbaP
       width: '100%',
       height: '100%',
       border: '0',
+      background: 'transparent',
+      // Match the widget's light scheme. A frame whose scheme differs from its document's is painted
+      // opaque by the browser, which would hide the store page on a dark-scheme site.
+      colorScheme: 'light',
     } satisfies Partial<CSSStyleDeclaration>)
 
     overlay.appendChild(iframe)
     document.body.appendChild(overlay)
+    if (!reduceMotion) requestAnimationFrame(() => { overlay.style.opacity = '1' })
 
     let settled = false
 
