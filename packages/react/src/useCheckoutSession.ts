@@ -38,9 +38,15 @@ export interface UseCheckoutSessionState {
   error: PayError | null
 }
 
+/** Options for one attempt. */
+export interface PayOptions {
+  /** Save the mobile-money number for next time once the attempt is accepted. */
+  saveMethod?: boolean
+}
+
 export interface UseCheckoutSessionResult extends UseCheckoutSessionState {
   loadContext: () => Promise<void>
-  pay: (method: SessionPaymentMethod, idempotencyKey: string) => Promise<void>
+  pay: (method: SessionPaymentMethod, idempotencyKey: string, options?: PayOptions) => Promise<void>
   cancel: () => void
   reset: () => void
 }
@@ -110,7 +116,7 @@ export function useCheckoutSession(
   }, [client, sessionId, clientSecret, cancel, toError])
 
   const pay = useCallback(
-    async (method: SessionPaymentMethod, idempotencyKey: string) => {
+    async (method: SessionPaymentMethod, idempotencyKey: string, options?: PayOptions) => {
       cancel()
       const controller = new AbortController()
       abortRef.current = controller
@@ -120,7 +126,7 @@ export function useCheckoutSession(
         const attempt = await client.createAttempt(
           sessionId,
           clientSecret,
-          { idempotency_key: idempotencyKey, method },
+          { idempotency_key: idempotencyKey, method, ...(options?.saveMethod ? { save_method: true } : {}) },
           { signal: controller.signal },
         )
         const nextAction = attempt.next_action

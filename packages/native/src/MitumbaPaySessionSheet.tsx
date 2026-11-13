@@ -8,9 +8,10 @@ import {
   Pressable,
   ActivityIndicator,
   StyleSheet,
+  Switch,
 } from 'react-native'
 import type { CheckoutInputField } from '@mitumba/pay'
-import { formatMoneyCode, methodDescriptorKey, sessionRefusal, type SessionRefusal } from '@mitumba/pay'
+import { formatMoneyCode, methodDescriptorKey, savedPhoneChoices, sessionRefusal, type SessionRefusal } from '@mitumba/pay'
 import { descriptorPhone, sessionMethodFor } from './methods'
 import { payTheme as t } from './theme'
 import { formatMoney } from './formatMoney'
@@ -71,10 +72,24 @@ export function MitumbaPaySessionSheet({
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
 
-  // Default the selection to the first available method once context loads.
+  const [saveNumber, setSaveNumber] = useState(true)
+  const saved = context?.saved_methods ?? []
+
+  // Once context loads, preselect the default saved number (its network and phone) when it can be
+  // paid now, else the first available method.
   useEffect(() => {
-    if (!selectedKey && methods.length > 0) setSelectedKey(methodDescriptorKey(methods[0]!))
-  }, [methods, selectedKey])
+    if (selectedKey || methods.length === 0) return
+    const preferred = saved.find((entry) => entry.is_default) ?? saved[0]
+    const network = preferred
+      ? methods.find((m) => m.type === 'mobile_money' && m.network === preferred.method.network && m.status === 'available')
+      : undefined
+    if (preferred && network) {
+      setSelectedKey(methodDescriptorKey(network))
+      setFieldValues((prev) => ({ ...prev, phone: preferred.method.phone }))
+      return
+    }
+    setSelectedKey(methodDescriptorKey(methods[0]!))
+  }, [methods, saved, selectedKey])
 
   const selected = useMemo(
     () => methods.find((m) => methodDescriptorKey(m) === selectedKey) ?? null,
@@ -103,13 +118,20 @@ export function MitumbaPaySessionSheet({
   // A method this SDK cannot build (e.g. mobile money without a network) is never submitted.
   const unpayable = selected !== null && fieldsComplete && !phoneInvalid && sessionMethodFor(selected, fieldValues) === null
   const methodUnavailable = selected?.status === 'temporarily_unavailable'
+  // The selected network's saved numbers, as one-tap choices.
+  const savedHere = selected?.type === 'mobile_money' && selected.network
+    ? savedPhoneChoices(saved.filter((entry) => entry.method.network === selected.network))
+    : []
+  const typedPhone = selected ? descriptorPhone(selected, fieldValues) : null
+  // Offer to save a valid mobile-money number that is not already saved on this network.
+  const canSave = selected?.type === 'mobile_money' && typeof typedPhone === 'string' && !savedHere.some((choice) => choice.value === typedPhone)
   const disabled = busy || done || !selected || methodUnavailable || !fieldsComplete || phoneInvalid || unpayable
 
   const submit = () => {
     if (!selected) return
     const method = sessionMethodFor(selected, fieldValues)
     if (!method) return
-    void checkout.pay(method, idempotencyKey())
+    void checkout.pay(method, idempotencyKey(), { saveMethod: canSave && saveNumber })
   }
 
   const money = (value: Parameters<typeof formatMoneyCode>[0]) => (locale ? formatMoney(value, locale) : formatMoneyCode(value))
@@ -224,6 +246,29 @@ export function MitumbaPaySessionSheet({
                   })}
                 </View>
 
+                {savedHere.length > 0 && !methodUnavailable ? (
+                  <View style={styles.saved} accessibilityLabel="Saved numbers">
+                    <Text style={styles.fieldLabel}>Saved numbers</Text>
+                    <View style={styles.chips}>
+                      {savedHere.map((choice) => {
+                        const active = choice.value === typedPhone
+                        return (
+                          <Pressable
+                            key={choice.value}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: active, disabled: busy }}
+                            disabled={busy}
+                            onPress={() => setFieldValues((prev) => ({ ...prev, phone: choice.value }))}
+                            style={[styles.chip, active ? styles.chipActive : null]}
+                          >
+                            <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>{choice.label}</Text>
+                          </Pressable>
+                        )
+                      })}
+                    </View>
+                  </View>
+                ) : null}
+
                 {selected && !methodUnavailable
                   ? selected.input_fields.map((field) => (
                       <Field
@@ -237,6 +282,19 @@ export function MitumbaPaySessionSheet({
                       />
                     ))
                   : null}
+
+                {canSave ? (
+                  <View style={styles.saveRow}>
+                    <Text style={styles.saveText}>Save this number for next time</Text>
+                    <Switch
+                      value={saveNumber}
+                      onValueChange={setSaveNumber}
+                      disabled={busy}
+                      accessibilityLabel="Save this number for next time"
+                      trackColor={{ true: t.color.green, false: t.color.border }}
+                    />
+                  </View>
+                ) : null}
 
                 {failed && message ? (
                   <Text accessibilityLiveRegion="polite" style={styles.errorMessage}>
@@ -413,6 +471,14 @@ const styles = StyleSheet.create({
   radioActive: { borderColor: t.color.green },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: t.color.green },
   fieldGroup: { marginTop: 20 },
+  saved: { marginTop: 20 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, backgroundColor: t.color.field, borderWidth: 1, borderColor: t.color.border },
+  chipActive: { backgroundColor: t.color.green, borderColor: t.color.green },
+  chipText: { color: t.color.ink, fontSize: 12 },
+  chipTextActive: { color: t.color.onGreen, fontWeight: '600' },
+  saveRow: { marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  saveText: { flex: 1, color: t.color.muted, fontSize: 13 },
   fieldLabel: { color: t.color.muted, fontSize: 12, marginBottom: 7 },
   inputWrap: {
     minHeight: 52,

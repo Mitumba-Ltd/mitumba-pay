@@ -182,3 +182,44 @@ describe('secure overlay', () => {
     expect(sent()).toContainEqual(expect.objectContaining({ type: MITUMBA_PAY_MESSAGE.close }))
   })
 })
+
+describe('saved numbers in the hosted checkout', () => {
+  const saved = [{ id: 'pm_1', label: 'M-Pesa', method: { type: 'mobile_money' as const, network: 'mpesa', phone: '+254712345678' }, is_default: true }]
+
+  const attemptBody = () => {
+    const [url, init] = fetchMock.mock.calls.at(-1)!
+    expect(String(url)).toContain('/pay/checkout-sessions/cs_1/attempts')
+    return JSON.parse((init as RequestInit).body as string)
+  }
+
+  it('preselects the default saved number and pays from it without saving it again', async () => {
+    await serveContext(context({ parent_origin: PARENT, saved_methods: saved }))
+    render(<SessionApp initialCreds={{ sessionId: 'cs_1', clientSecret: 'csec_1' }} />)
+    await flush()
+    expect(container.textContent).toContain('M-Pesa ••• 678')
+    expect((container.querySelector('input[inputmode="tel"]') as HTMLInputElement).value).toBe('+254712345678')
+    expect(container.textContent).not.toContain('Save this number for next time')
+
+    fetchMock.mockImplementation(() => new Promise(() => {}))
+    act(() => container.querySelector<HTMLButtonElement>('.mpay-primary')!.click())
+    const body = attemptBody()
+    expect(body.method).toEqual({ type: 'mobile_money', network: 'mpesa', phone: '+254712345678' })
+    expect(body).not.toHaveProperty('save_method')
+  })
+
+  it('saves a new number when the buyer leaves the box ticked', async () => {
+    await serveContext(context({ parent_origin: PARENT }))
+    render(<SessionApp initialCreds={{ sessionId: 'cs_1', clientSecret: 'csec_1' }} />)
+    await flush()
+    const input = container.querySelector('input[inputmode="tel"]') as HTMLInputElement
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '0733331042')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('Save this number for next time')
+
+    fetchMock.mockImplementation(() => new Promise(() => {}))
+    act(() => container.querySelector<HTMLButtonElement>('.mpay-primary')!.click())
+    expect(attemptBody()).toMatchObject({ method: { phone: '+254733331042' }, save_method: true })
+  })
+})

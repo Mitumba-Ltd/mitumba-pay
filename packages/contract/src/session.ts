@@ -163,7 +163,28 @@ export interface CheckoutSessionContext {
   cancel_url: string | null
   expires_at: string
   server_time: string
+  /**
+   * The buyer's saved numbers in this market, on networks it offers, default first: one tap to pay
+   * from. Send `method` unchanged in an attempt. Empty when none, or from a server that predates it.
+   */
+  saved_methods: CheckoutSessionSavedMethod[]
 }
+
+/** A saved number as a session offers it. */
+export interface CheckoutSessionSavedMethod {
+  id: string
+  /** The buyer's label; the network's name when they gave none. */
+  label: string
+  method: { type: 'mobile_money'; network: string; phone: string }
+  is_default: boolean
+}
+
+export const checkoutSessionSavedMethodSchema = z.object({
+  id: z.string().min(1),
+  label: z.string(),
+  method: mobileMoneyMethodSchema,
+  is_default: z.boolean(),
+})
 
 export const checkoutSessionContextSchema = z.object({
   version: z.literal(PAY_CONTRACT_VERSION),
@@ -179,6 +200,7 @@ export const checkoutSessionContextSchema = z.object({
   cancel_url: z.string().nullable(),
   expires_at: z.string(),
   server_time: z.string(),
+  saved_methods: z.array(checkoutSessionSavedMethodSchema).default([]),
 })
 
 // ---------------------------------------------------------------------------
@@ -211,11 +233,14 @@ export const sessionPaymentMethodSchema = z.discriminatedUnion('type', [
 export interface CreateAttemptInput {
   idempotency_key: string
   method: SessionPaymentMethod
+  /** Save the mobile-money number for next time once the attempt is accepted. Ignored for a card. */
+  save_method?: boolean
 }
 
 export const createAttemptInputSchema = z.object({
   idempotency_key: z.string().min(1),
   method: sessionPaymentMethodSchema,
+  save_method: z.boolean().optional(),
 })
 
 /**

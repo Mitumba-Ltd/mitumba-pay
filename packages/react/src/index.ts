@@ -17,6 +17,7 @@ export type {
   SessionPhase,
   UseCheckoutSessionState,
   UseCheckoutSessionResult,
+  PayOptions,
 } from './useCheckoutSession'
 export { MitumbaPayButton, MitumbaPayWidget } from './components'
 export type {
