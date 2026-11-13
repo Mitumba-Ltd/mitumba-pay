@@ -90,6 +90,7 @@ export function openMitumbaPay(options: OpenMitumbaPayOptions): Promise<MitumbaP
 
     const iframe = document.createElement('iframe')
     const src = new URL(widgetUrl)
+    src.searchParams.set('session', options.sessionId)
     src.searchParams.set('parent_origin', parentOrigin)
     iframe.src = src.toString()
     iframe.title = 'Mitumba Pay'

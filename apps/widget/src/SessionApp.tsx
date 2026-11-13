@@ -24,36 +24,68 @@ import './app.css'
  * available_methods. It never receives or trusts a client-authored amount,
  * currency, country, or method.
  */
-export function SessionApp() {
+/** How long the widget waits for the parent's INIT before telling the buyer it could not start. */
+export const INIT_TIMEOUT_MS = 15_000
+
+export interface SessionCredentials {
+  sessionId: string
+  clientSecret: string
+}
+
+export function SessionApp({ initialCreds = null }: { initialCreds?: SessionCredentials | null } = {}) {
   const parentOrigin = useMemo(readParentOrigin, [])
-  const [creds, setCreds] = useState<{ sessionId: string; clientSecret: string } | null>(null)
+  const [creds, setCreds] = useState<SessionCredentials | null>(initialCreds)
+  const [timedOut, setTimedOut] = useState(false)
 
   // Announce readiness and wait for the parent's INIT (session id + secret).
   useEffect(() => {
+    if (creds) return
     const off = onInit(parentOrigin, (payload) =>
       setCreds({ sessionId: payload.session_id, clientSecret: payload.client_secret }),
     )
     postToParent(parentOrigin, CHILD_MESSAGE.ready, { embedded: true })
-    return off
-  }, [parentOrigin])
+    const timer = setTimeout(() => setTimedOut(true), INIT_TIMEOUT_MS)
+    return () => {
+      off()
+      clearTimeout(timer)
+    }
+  }, [creds, parentOrigin])
 
   if (!creds) {
     return (
       <MitumbaThemeProvider disableCssBaseline>
-        <main className="widget-waiting">
-          <MitumbaGlass blur={26} opacity={0.84} rounding="huge" role="status" sx={{ width: 'min(420px, 100%)' }}>
-            <div className="widget-waiting-content">
-              <span className="widget-waiting-mark">M</span>
-              <h1>Mitumba Pay</h1>
-              <p>Secure checkout is getting ready. This usually takes only a moment.</p>
-            </div>
-          </MitumbaGlass>
-        </main>
+        <WaitingCard
+          timedOut={timedOut}
+          onClose={() => postToParent(parentOrigin, CHILD_MESSAGE.close)}
+        />
       </MitumbaThemeProvider>
     )
   }
 
   return <SessionCheckout parentOrigin={parentOrigin} sessionId={creds.sessionId} clientSecret={creds.clientSecret} />
+}
+
+/** Shown only until the parent hands over the session; never left spinning without a way out. */
+export function WaitingCard({ timedOut, onClose }: { timedOut: boolean; onClose: () => void }) {
+  return (
+    <main className="widget-waiting">
+      <MitumbaGlass blur={26} opacity={0.84} rounding="huge" role="status" sx={{ width: 'min(400px, 100%)' }}>
+        <div className="widget-waiting-content">
+          <span className="widget-waiting-mark">M</span>
+          <h1>Mitumba Pay</h1>
+          {timedOut ? (
+            <p role="alert">We couldn't start secure checkout. Close this and try again.</p>
+          ) : (
+            <>
+              <span className="widget-waiting-spinner" aria-hidden="true" />
+              <p>Preparing secure checkout…</p>
+            </>
+          )}
+          <MitumbaPrimaryButton label="Close" variant="ghost" onClick={onClose} />
+        </div>
+      </MitumbaGlass>
+    </main>
+  )
 }
 
 function SessionCheckout({

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import { MitumbaGlass, MitumbaPrimaryButton, MitumbaThemeProvider } from '@mitumba/ui'
+import { MitumbaGlass, MitumbaThemeProvider } from '@mitumba/ui'
 import { useCheckout, MitumbaPayWidget, type WidgetPayInput } from '@mitumba/pay-react'
 import {
   MESSAGE,
@@ -8,6 +8,8 @@ import {
   postToParent,
   type HostedCheckoutConfig,
 } from './bridge'
+import { onInit as onSessionInit, postToParent as postToSessionParent, CHILD_MESSAGE } from './session-bridge'
+import { SessionApp, WaitingCard, INIT_TIMEOUT_MS, type SessionCredentials } from './SessionApp'
 import './app.css'
 
 const PREVIEW: HostedCheckoutConfig = {
@@ -40,6 +42,8 @@ export function App() {
   const initialOrigin = useMemo(parentOrigin, [])
   const [replyOrigin, setReplyOrigin] = useState<string | null>(initialOrigin)
   const [config, setConfig] = useState<HostedCheckoutConfig | null>(embedded ? null : PREVIEW)
+  // A Bridge V2 parent that opened the widget without ?session= is handed to the session app.
+  const [sessionCreds, setSessionCreds] = useState<SessionCredentials | null>(null)
   const idempotencyKey = useRef<string | null>(null)
 
   const clientConfig = useMemo(
@@ -50,8 +54,16 @@ export function App() {
   const close = useCallback(() => {
     checkout.cancel()
     postToParent(replyOrigin, MESSAGE.close)
+    if (embedded && !config) postToSessionParent(replyOrigin, CHILD_MESSAGE.close)
     if (embedded) setConfig(null)
-  }, [checkout.cancel, embedded, replyOrigin])
+  }, [checkout.cancel, config, embedded, replyOrigin])
+
+  const [initTimedOut, setInitTimedOut] = useState(false)
+  useEffect(() => {
+    if (!embedded || config || sessionCreds) return
+    const timer = setTimeout(() => setInitTimedOut(true), INIT_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [config, embedded, sessionCreds])
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent<unknown>) => {
@@ -63,7 +75,15 @@ export function App() {
     }
     window.addEventListener('message', handleMessage)
     postToParent(initialOrigin, MESSAGE.ready, { embedded: true })
-    return () => window.removeEventListener('message', handleMessage)
+    // Announce in both bridge versions; whichever parent is listening answers with its INIT.
+    const offSession = onSessionInit(initialOrigin, (payload) =>
+      setSessionCreds({ sessionId: payload.session_id, clientSecret: payload.client_secret }),
+    )
+    postToSessionParent(initialOrigin, CHILD_MESSAGE.ready, { embedded: true })
+    return () => {
+      window.removeEventListener('message', handleMessage)
+      offSession()
+    }
   }, [initialOrigin])
 
   useEffect(() => {
@@ -116,6 +136,8 @@ export function App() {
     })
   }
 
+  if (sessionCreds) return <SessionApp initialCreds={sessionCreds} />
+
   return (
     <MitumbaThemeProvider disableCssBaseline>
       {config ? (
@@ -153,16 +175,7 @@ export function App() {
           </div>
         </main>
       ) : (
-        <main className="widget-waiting">
-          <MitumbaGlass blur={26} opacity={0.84} rounding="huge" role="status" sx={{ width: 'min(420px, 100%)' }}>
-            <div className="widget-waiting-content">
-              <span className="widget-waiting-mark">M</span>
-              <h1>Mitumba Pay</h1>
-              <p>Secure checkout is getting ready. This usually takes only a moment.</p>
-              <MitumbaPrimaryButton label="Close" variant="ghost" onClick={close} />
-            </div>
-          </MitumbaGlass>
-        </main>
+        <WaitingCard timedOut={initTimedOut} onClose={close} />
       )}
     </MitumbaThemeProvider>
   )
