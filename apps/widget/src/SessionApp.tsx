@@ -1,29 +1,48 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MitumbaGlass, MitumbaPrimaryButton, MitumbaThemeProvider } from '@mitumba/ui'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import {
+  MitumbaPayWidget,
+  currencyDigits,
   formatMoney,
-  methodDescriptorKey,
-  normalizePhone,
   unavailableMessage,
   useCheckoutSession,
-  type CheckoutMethodDescriptor,
+  type CheckoutPhase,
+  type CheckoutSessionContext,
+  type PhoneFormat,
   type SessionPaymentMethod,
+  type SessionPhase,
+  type UseCheckoutResult,
+  type UseCheckoutSessionResult,
+  type WidgetMethod,
+  type WidgetNetwork,
+  type WidgetPayInput,
 } from '@mitumba/pay-react'
+import { onInit, postToParent, readParentOrigin, CHILD_MESSAGE } from './session-bridge'
 import {
-  onInit,
-  postToParent,
-  readParentOrigin,
-  CHILD_MESSAGE,
-} from './session-bridge'
+  allPassed,
+  checkConnection,
+  checkFrame,
+  checkMerchant,
+  checkMethods,
+  checkSession,
+  firstFailure,
+  pendingChecks,
+  readFrameFacts,
+  settle,
+  type FrameFacts,
+  type SecureCheck,
+} from './secure-checks'
 import './app.css'
 
 /**
- * Session-driven hosted widget (RFC 0001 Bridge V2). The parent launcher passes
- * only a session id + client secret via INIT; the widget loads ALL display data
- * from the authoritative session context and renders the server-authored
- * available_methods. It never receives or trusts a client-authored amount,
- * currency, country, or method.
+ * Session-driven hosted widget (RFC 0001 Bridge V2), shown as a secure overlay.
+ *
+ * The parent launcher passes only a session id + client secret via INIT. Before any payment UI
+ * renders, the overlay checks the connection, the frame, the parent's identity, and the
+ * server-authored session (bound merchant origin, status, expiry, methods). The checkout renders
+ * only when every check passes; otherwise the overlay refuses and says why. All display data comes
+ * from the authoritative session context, never from the parent.
  */
+
 /** How long the widget waits for the parent's INIT before telling the buyer it could not start. */
 export const INIT_TIMEOUT_MS = 15_000
 
@@ -32,259 +51,259 @@ export interface SessionCredentials {
   clientSecret: string
 }
 
+/** Checks that depend only on the frame, settled before the widget even announces itself. */
+export function frameChecks(facts: FrameFacts): SecureCheck[] {
+  let checks = settle(pendingChecks(), 'connection', checkConnection(facts))
+  if (!firstFailure(checks)) checks = settle(checks, 'frame', checkFrame(facts))
+  return checks
+}
+
 export function SessionApp({ initialCreds = null }: { initialCreds?: SessionCredentials | null } = {}) {
+  const facts = useMemo(readFrameFacts, [])
   const parentOrigin = useMemo(readParentOrigin, [])
   const [creds, setCreds] = useState<SessionCredentials | null>(initialCreds)
-  const [timedOut, setTimedOut] = useState(false)
+  const [checks, setChecks] = useState<SecureCheck[]>(() => frameChecks(facts))
+  const refused = firstFailure(checks) !== null
 
-  // Announce readiness and wait for the parent's INIT (session id + secret).
+  // Announce readiness only from a frame that passed its checks, then wait for INIT.
   useEffect(() => {
-    if (creds) return
+    if (creds || refused) return
     const off = onInit(parentOrigin, (payload) =>
       setCreds({ sessionId: payload.session_id, clientSecret: payload.client_secret }),
     )
     postToParent(parentOrigin, CHILD_MESSAGE.ready, { embedded: true })
-    const timer = setTimeout(() => setTimedOut(true), INIT_TIMEOUT_MS)
+    const timer = setTimeout(
+      () => setChecks((current) => settle(current, 'session', "We couldn't start secure checkout. Close this and try again.")),
+      INIT_TIMEOUT_MS,
+    )
     return () => {
       off()
       clearTimeout(timer)
     }
-  }, [creds, parentOrigin])
+  }, [creds, refused, parentOrigin])
 
-  if (!creds) {
-    return (
-      <MitumbaThemeProvider disableCssBaseline>
-        <WaitingCard
-          timedOut={timedOut}
-          onClose={() => postToParent(parentOrigin, CHILD_MESSAGE.close)}
-        />
-      </MitumbaThemeProvider>
-    )
+  const close = useCallback(() => postToParent(parentOrigin, CHILD_MESSAGE.close), [parentOrigin])
+
+  if (!creds || firstFailure(checks)) {
+    return <SecureSheet checks={checks} onClose={close} />
   }
 
-  return <SessionCheckout parentOrigin={parentOrigin} sessionId={creds.sessionId} clientSecret={creds.clientSecret} />
-}
-
-/** Shown only until the parent hands over the session; never left spinning without a way out. */
-export function WaitingCard({ timedOut, onClose }: { timedOut: boolean; onClose: () => void }) {
   return (
-    <main className="widget-waiting">
-      <MitumbaGlass blur={26} opacity={0.84} rounding="huge" role="status" sx={{ width: 'min(400px, 100%)' }}>
-        <div className="widget-waiting-content">
-          <span className="widget-waiting-mark">M</span>
-          <h1>Mitumba Pay</h1>
-          {timedOut ? (
-            <p role="alert">We couldn't start secure checkout. Close this and try again.</p>
-          ) : (
-            <>
-              <span className="widget-waiting-spinner" aria-hidden="true" />
-              <p>Preparing secure checkout…</p>
-            </>
-          )}
-          <MitumbaPrimaryButton label="Close" variant="ghost" onClick={onClose} />
-        </div>
-      </MitumbaGlass>
-    </main>
+    <SessionCheckout
+      parentOrigin={parentOrigin}
+      sessionId={creds.sessionId}
+      clientSecret={creds.clientSecret}
+      frameChecks={checks}
+      onClose={close}
+    />
   )
 }
+
+/** The V1 waiting state uses the same secure sheet, so both bridges look and behave alike. */
+export function WaitingCard({ timedOut, onClose }: { timedOut: boolean; onClose: () => void }) {
+  const base = useMemo(() => frameChecks(readFrameFacts()), [])
+  const checks = timedOut && !firstFailure(base)
+    ? settle(base, 'session', "We couldn't start secure checkout. Close this and try again.")
+    : base
+  return <SecureSheet checks={checks} onClose={onClose} />
+}
+
+const BUSY_PHASES: readonly SessionPhase[] = ['initiating', 'awaiting_confirmation', 'redirecting', 'polling']
 
 function SessionCheckout({
   parentOrigin,
   sessionId,
   clientSecret,
+  frameChecks: initialChecks,
+  onClose,
 }: {
   parentOrigin: string | null
   sessionId: string
   clientSecret: string
+  frameChecks: SecureCheck[]
+  onClose: () => void
 }) {
   const config = useMemo(() => ({ baseUrl: undefined }), [])
-  const checkout = useCheckoutSession(config, sessionId, clientSecret)
+  const session = useCheckoutSession(config, sessionId, clientSecret)
   const idempotencyKey = useRef<string>(crypto.randomUUID())
-  // Keyed by type and network: mobile money is one descriptor per network (M-Pesa, Airtel Money…).
-  const [selectedKey, setSelectedKey] = useState<string | null>(null)
-  const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
 
   // Load the authoritative context once on mount.
-  const loadContext = checkout.loadContext
+  const loadContext = session.loadContext
   useEffect(() => {
     void loadContext()
   }, [loadContext])
 
-  const methods = checkout.context?.available_methods ?? []
-  useEffect(() => {
-    if (!selectedKey && methods.length > 0) setSelectedKey(methodDescriptorKey(methods[0]!))
-  }, [methods, selectedKey])
+  const { context: loaded, phase: loadPhase, error: loadError } = session
+  const checks = useMemo(
+    () => sessionChecks(initialChecks, { context: loaded, phase: loadPhase, error: loadError }, parentOrigin),
+    [initialChecks, loaded, loadPhase, loadError, parentOrigin],
+  )
 
   // Relay lifecycle to the parent; emit COMPLETE on paid.
   useEffect(() => {
     postToParent(parentOrigin, CHILD_MESSAGE.status, {
-      phase: checkout.phase,
-      checkout_status: checkout.status?.checkout_status ?? null,
+      phase: session.phase,
+      checkout_status: session.status?.checkout_status ?? null,
     })
-    if (checkout.phase === 'paid') {
-      postToParent(parentOrigin, CHILD_MESSAGE.complete, checkout.status)
-    }
-  }, [checkout.phase, checkout.status, parentOrigin])
+    if (session.phase === 'paid') postToParent(parentOrigin, CHILD_MESSAGE.complete, session.status)
+  }, [session.phase, session.status, parentOrigin])
 
-  const close = useCallback(() => postToParent(parentOrigin, CHILD_MESSAGE.close), [parentOrigin])
-
-  const selected = methods.find((m) => methodDescriptorKey(m) === selectedKey) ?? null
-  const requiredFields = selected?.input_fields.filter((f) => f.required) ?? []
-  const fieldsComplete = requiredFields.every((f) => (fieldValues[f.name] ?? '').trim().length > 0)
-  const busy =
-    checkout.phase === 'loading_context' ||
-    checkout.phase === 'initiating' ||
-    checkout.phase === 'polling' ||
-    checkout.phase === 'redirecting' ||
-    checkout.phase === 'awaiting_confirmation'
-  const done = checkout.phase === 'paid'
-  const methodUnavailable = selected?.status === 'temporarily_unavailable'
-  // Null until the input is complete and valid, or when the method cannot be paid from here.
-  const method = selected ? buildMethod(selected, fieldValues) : null
-  const disabled = busy || done || !selected || methodUnavailable || !fieldsComplete || method === null
-
-  const submit = () => {
-    if (method) void checkout.pay(method, idempotencyKey.current)
+  const busy = BUSY_PHASES.includes(session.phase)
+  const handleBackdrop = (event: MouseEvent<HTMLElement>) => {
+    // Like a system payment sheet: a tap outside dismisses, except while a payment is in flight.
+    if (event.target === event.currentTarget && !busy) onClose()
   }
 
-  const amountLabel = checkout.context
-    ? formatMoney(checkout.context.amount)
-    : ''
+  const context = session.context
+  if (!context || !allPassed(checks)) {
+    return <SecureSheet checks={checks} onClose={onClose} />
+  }
+
+  const view = widgetView(context)
+  const pay = (input: WidgetPayInput) => {
+    // A new attempt after a failed or abandoned one needs a new key; a transport error reuses it.
+    if (session.phase === 'failed' || session.phase === 'retryable' || session.phase === 'timeout') {
+      idempotencyKey.current = crypto.randomUUID()
+    }
+    const method: SessionPaymentMethod =
+      input.method === 'card' ? { type: 'card' } : { type: 'mobile_money', network: input.network, phone: input.phone }
+    void session.pay(method, idempotencyKey.current)
+  }
 
   return (
-    <MitumbaThemeProvider disableCssBaseline>
-      <main className="widget-overlay is-embedded">
-        <div className="widget-stage">
-          <MitumbaGlass blur={20} opacity={0.9} rounding="huge" sx={{ width: 'min(460px, 100%)', p: 3 }}>
-            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <strong>Mitumba Pay</strong>
-              <button type="button" aria-label="Close payment" onClick={close} style={closeStyle}>×</button>
-            </header>
-
-            <p style={{ color: '#6B6B65', fontSize: 12, margin: '12px 0 2px' }}>AMOUNT DUE</p>
-            <p style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>{amountLabel || '…'}</p>
-            {checkout.context ? (
-              <p style={{ color: '#6B6B65', fontSize: 12 }}>Ref · {checkout.context.reference}</p>
-            ) : null}
-
-            {done ? (
-              <p role="status" style={{ marginTop: 20 }}>Payment received. Your order is confirmed.</p>
-            ) : checkout.phase === 'error' ? (
-              <p role="alert" style={{ marginTop: 20, color: '#B3261E' }}>
-                {checkout.error?.message ?? 'We couldn’t load this checkout.'}
-              </p>
-            ) : (
-              <>
-                <div role="radiogroup" aria-label="Payment method" style={{ marginTop: 18, display: 'grid', gap: 8 }}>
-                  {methods.map((m) => {
-                    const key = methodDescriptorKey(m)
-                    const active = key === selectedKey
-                    const unavailable = m.status === 'temporarily_unavailable'
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        aria-disabled={unavailable}
-                        disabled={unavailable}
-                        onClick={() => setSelectedKey(key)}
-                        style={methodStyle(active, unavailable)}
-                      >
-                        <span>{m.display_name}</span>
-                        {unavailable ? <small> · Temporarily unavailable</small> : null}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {selected && !methodUnavailable
-                  ? selected.input_fields.map((field) => (
-                      <label key={field.name} style={{ display: 'block', marginTop: 14 }}>
-                        <span style={{ fontSize: 12, color: '#6B6B65' }}>{field.label}</span>
-                        <input
-                          value={fieldValues[field.name] ?? ''}
-                          onChange={(e) =>
-                            setFieldValues((prev) => ({ ...prev, [field.name]: e.target.value }))
-                          }
-                          placeholder={field.example ?? ''}
-                          inputMode={field.type === 'tel' ? 'tel' : 'text'}
-                          disabled={busy}
-                          style={inputStyle}
-                        />
-                      </label>
-                    ))
-                  : null}
-
-                {checkout.phase === 'unavailable' ? (
-                  <p role="alert" style={{ marginTop: 16, color: '#7A5B00' }}>
-                    {unavailableMessage(checkout.error?.retryAfterMs)}
-                  </p>
-                ) : null}
-
-                <div style={{ marginTop: 20 }}>
-                  <MitumbaPrimaryButton
-                    label={busy ? 'Processing…' : checkout.phase === 'unavailable' ? 'Try again' : amountLabel ? `Pay ${amountLabel}` : 'Pay'}
-                    disabled={disabled}
-                    onClick={submit}
-                  />
-                </div>
-              </>
-            )}
-          </MitumbaGlass>
-        </div>
-      </main>
-    </MitumbaThemeProvider>
+    <main className="pay-overlay" onMouseDown={handleBackdrop}>
+      <div className="pay-stage">
+        <MitumbaPayWidget
+          checkout={asWidgetCheckout(session)}
+          amountLabel={view.amountLabel}
+          lineItems={view.lineItems}
+          totalLabel={view.amountLabel}
+          orderId={context.reference || undefined}
+          metadata={[{ label: 'Payment protection', value: 'Funds held securely until delivery' }]}
+          merchantName="Mitumba"
+          logoUrl="/widget/mitumba-pay-logo.png"
+          methods={view.methods}
+          networks={view.networks}
+          phoneFormat={view.phoneFormat}
+          supportLabel="Available 24/7"
+          onClose={onClose}
+          onPay={pay}
+        />
+      </div>
+    </main>
   )
 }
 
-/**
- * Map a method descriptor + collected fields into the typed SessionPaymentMethod. Mobile money is sent
- * to the descriptor's network only; without one it is not payable, never guessed.
- */
-function buildMethod(
-  descriptor: CheckoutMethodDescriptor,
-  values: Record<string, string>,
-): SessionPaymentMethod | null {
-  if (descriptor.type === 'card') return { type: 'card' }
-  if (descriptor.type === 'mobile_money' && descriptor.network) {
-    const raw = (values.phone ?? '').trim()
-    if (!raw) return null
-    // Normalize against the session's calling code so a local form (0712 345 678) is accepted.
-    const callingCode = descriptor.input_fields.find((f) => f.name === 'phone')?.calling_code
-    const phone = callingCode ? normalizePhone(raw, { callingCode }) : raw
-    return phone ? { type: 'mobile_money', network: descriptor.network, phone } : null
+/** Adds the server-side checks to the frame checks as the session context arrives. */
+export function sessionChecks(
+  frame: SecureCheck[],
+  session: Pick<UseCheckoutSessionResult, 'context' | 'phase' | 'error'>,
+  parentOrigin: string | null,
+): SecureCheck[] {
+  const { context } = session
+  if (!context) {
+    if (session.phase === 'unavailable') return settle(frame, 'session', unavailableMessage(session.error?.retryAfterMs))
+    if (session.phase === 'error') {
+      return settle(frame, 'session', "We couldn't load this payment. Close this window and check out again.")
+    }
+    return frame
   }
-  return null
+  let checks = settle(frame, 'merchant', checkMerchant(context, parentOrigin))
+  if (firstFailure(checks)) return checks
+  checks = settle(checks, 'session', checkSession(context))
+  if (firstFailure(checks)) return checks
+  return settle(checks, 'methods', checkMethods(context))
 }
 
-const closeStyle: React.CSSProperties = {
-  border: 0,
-  background: 'rgba(0,0,0,0.06)',
-  width: 32,
-  height: 32,
-  borderRadius: 16,
-  fontSize: 20,
-  cursor: 'pointer',
-}
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  marginTop: 6,
-  padding: '12px 14px',
-  borderRadius: 12,
-  border: '1px solid #E0E0DC',
-  fontSize: 16,
-}
-function methodStyle(active: boolean, unavailable: boolean): React.CSSProperties {
+/** The hosted widget's checkout surface, driven by the session controller. */
+export function asWidgetCheckout(session: UseCheckoutSessionResult): UseCheckoutResult {
+  const phase: CheckoutPhase =
+    session.phase === 'idle' || session.phase === 'loading_context' || session.phase === 'ready' ? 'idle' : session.phase
   return {
-    textAlign: 'left',
-    padding: '14px 16px',
-    borderRadius: 12,
-    border: `1px solid ${active ? '#3D9A52' : '#E0E0DC'}`,
-    background: active ? '#EAF5EC' : '#FFFFFF',
-    opacity: unavailable ? 0.5 : 1,
-    cursor: unavailable ? 'not-allowed' : 'pointer',
-    fontSize: 14,
-    fontWeight: 600,
+    phase,
+    status: null,
+    nextAction: session.nextAction,
+    error: session.error,
+    start: async () => {},
+    cancel: session.cancel,
+    reset: session.reset,
   }
+}
+
+/** Money as the hosted card shows it: currency code first, e.g. `KES 6,000.00`. */
+export function moneyLabel(money: CheckoutSessionContext['amount']): string {
+  const digits = currencyDigits(money.currency)
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: money.currency,
+      currencyDisplay: 'code',
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    })
+      .format(money.minor_units / 10 ** digits)
+      .replace(/\u00a0/g, ' ')
+  } catch {
+    return formatMoney(money)
+  }
+}
+
+/** Widget props from the authoritative session context only. */
+export function widgetView(context: CheckoutSessionContext): {
+  amountLabel: string
+  lineItems: { label: string; value: string }[]
+  methods: WidgetMethod[]
+  networks: WidgetNetwork[]
+  phoneFormat: PhoneFormat | undefined
+} {
+  const mobile = context.available_methods.flatMap((m) =>
+    m.type === 'mobile_money' && m.network ? [{ ...m, network: m.network }] : [],
+  )
+  const card = context.available_methods.find((m) => m.type === 'card' && m.status === 'available')
+  const methods: WidgetMethod[] = []
+  if (mobile.length > 0) methods.push('mobile_money')
+  if (card) methods.push('card')
+  const phoneField = mobile.flatMap((m) => m.input_fields).find((f) => f.name === 'phone' && f.calling_code)
+  return {
+    amountLabel: moneyLabel(context.amount),
+    lineItems: context.line_items.map((item) => ({ label: item.label, value: moneyLabel(item.amount) })),
+    methods,
+    networks: mobile.map((m) => ({ id: m.network, name: m.display_name, available: m.status === 'available' })),
+    phoneFormat: phoneField?.calling_code
+      ? { callingCode: phoneField.calling_code, example: phoneField.example }
+      : undefined,
+  }
+}
+
+
+/**
+ * Shown until the checks pass. The checks run silently: while they run there is only a quiet spinner
+ * over the dimmed page, and the checkout card appears once everything is verified. A failed check
+ * replaces the spinner with a short card that says why and offers Close.
+ */
+export function SecureSheet({
+  checks,
+  onClose,
+}: {
+  checks: SecureCheck[]
+  onClose: () => void
+}) {
+  const failure = firstFailure(checks)
+  if (!failure) {
+    return (
+      <main className="pay-overlay" aria-busy="true">
+        <span className="pay-gate-spinner" role="status" aria-label="Loading secure checkout" />
+      </main>
+    )
+  }
+  return (
+    <main className="pay-overlay">
+      <section className="pay-refusal" role="alertdialog" aria-labelledby="pay-refusal-title" aria-describedby="pay-refusal-reason">
+        <span className="pay-refusal-mark" aria-hidden="true">M</span>
+        <h1 id="pay-refusal-title">Mitumba Pay</h1>
+        <p id="pay-refusal-reason" role="alert">{failure.reason}</p>
+        <button type="button" className="pay-refusal-close" onClick={onClose}>Close</button>
+      </section>
+    </main>
+  )
 }
