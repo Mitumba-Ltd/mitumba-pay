@@ -35,10 +35,14 @@ button, input { font: inherit; }
   backdrop-filter: blur(18px);
 }
 
-.widget-waiting-content { width: min(420px, 100%); padding: 30px; text-align: center; }
+.widget-waiting-content { box-sizing: border-box; width: 100%; padding: 30px 28px 22px; text-align: center; }
 .widget-waiting-mark { display: grid; place-items: center; width: 58px; height: 58px; margin: 0 auto 18px; border-radius: 18px; background: #3D9A52; color: white; font-size: 25px; font-weight: 800; }
-.widget-waiting h1 { margin: 0; color: #17331f; font-size: 26px; letter-spacing: -.03em; }
-.widget-waiting p { margin: 9px 0 24px; color: #607066; line-height: 1.6; font-size: 14px; }
+.widget-waiting h1 { margin: 0; color: #17331f; font-size: 24px; letter-spacing: -.02em; }
+.widget-waiting p { margin: 10px 0 18px; color: #607066; line-height: 1.5; font-size: 14px; overflow-wrap: anywhere; }
+.widget-waiting p[role="alert"] { color: #8A3A12; }
+.widget-waiting-spinner { display: block; width: 26px; height: 26px; margin: 18px auto 0; border-radius: 50%; border: 3px solid rgba(61,154,82,.2); border-top-color: #3D9A52; animation: widget-spin 800ms linear infinite; }
+
+@keyframes widget-spin { to { transform: rotate(360deg) } }
 
 @keyframes overlay-in { from { opacity: 0 } to { opacity: 1 } }
 @keyframes stage-in { from { opacity: 0; transform: translateY(18px) scale(.985) } to { opacity: 1; transform: none } }
@@ -51,4 +55,5 @@ button, input { font: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .widget-overlay, .widget-stage { animation: none; }
+  .widget-waiting-spinner { animation-duration: 2400ms; }
 }
