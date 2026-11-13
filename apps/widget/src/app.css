@@ -9,51 +9,57 @@
 html, body, #root { min-width: 320px; min-height: 100%; margin: 0; background: transparent; }
 body { min-height: 100dvh; }
 button, input { font: inherit; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
+/* Standalone preview (V1, not embedded). */
 .widget-overlay {
   min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: clamp(12px, 3vw, 36px);
   background: rgba(10, 22, 14, 0.42);
-  backdrop-filter: blur(12px) saturate(115%);
-  -webkit-backdrop-filter: blur(12px) saturate(115%);
   animation: overlay-in 180ms ease-out;
 }
-
-.widget-overlay.is-embedded { cursor: default; }
+.widget-overlay.is-embedded { cursor: default; background: transparent; }
 .widget-stage { width: min(900px, 100%); cursor: default; animation: stage-in 260ms cubic-bezier(.2,.8,.2,1); }
 
-.widget-waiting {
+/*
+ * Secure overlay. The launcher already dims the store page behind the frame, so this layer stays
+ * transparent and only centres the hosted checkout card (full screen on phones, as the card's own
+ * layout does).
+ */
+.pay-overlay {
+  box-sizing: border-box;
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 24px;
-  background:
-    radial-gradient(circle at 50% 10%, rgba(61,154,82,.28), transparent 45%),
-    rgba(8, 22, 13, .54);
-  backdrop-filter: blur(18px);
+  padding: clamp(12px, 3vw, 36px);
+  background: transparent;
 }
+.pay-stage { width: min(900px, 100%); animation: stage-in 280ms cubic-bezier(.2,.8,.2,1); }
 
-.widget-waiting-content { box-sizing: border-box; width: 100%; padding: 30px 28px 22px; text-align: center; }
-.widget-waiting-mark { display: grid; place-items: center; width: 58px; height: 58px; margin: 0 auto 18px; border-radius: 18px; background: #3D9A52; color: white; font-size: 25px; font-weight: 800; }
-.widget-waiting h1 { margin: 0; color: #17331f; font-size: 24px; letter-spacing: -.02em; }
-.widget-waiting p { margin: 10px 0 18px; color: #607066; line-height: 1.5; font-size: 14px; overflow-wrap: anywhere; }
-.widget-waiting p[role="alert"] { color: #8A3A12; }
-.widget-waiting-spinner { display: block; width: 26px; height: 26px; margin: 18px auto 0; border-radius: 50%; border: 3px solid rgba(61,154,82,.2); border-top-color: #3D9A52; animation: widget-spin 800ms linear infinite; }
+.pay-gate-spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.28); border-top-color: #ffffff; animation: widget-spin 800ms linear infinite; }
 
+.pay-refusal { box-sizing: border-box; width: min(380px, 100%); padding: 28px 26px 20px; border-radius: 24px; background: #fff; color: #172019; text-align: center; box-shadow: 0 32px 90px rgba(18,39,25,.24); animation: stage-in 260ms cubic-bezier(.2,.8,.2,1); }
+.pay-refusal-mark { display: grid; place-items: center; width: 48px; height: 48px; margin: 0 auto 14px; border-radius: 14px; background: #3D9A52; color: #fff; font-weight: 800; font-size: 21px; }
+.pay-refusal h1 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
+.pay-refusal p { margin: 10px 0 18px; color: #a13a30; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.pay-refusal-close { width: 100%; min-height: 48px; border: 0; border-radius: 4px; background: #3D9A52; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
+.pay-refusal-close:hover { background: #2f7f42; }
+.pay-refusal-close:focus-visible { outline: 2px solid #17331f; outline-offset: 2px; }
 @keyframes widget-spin { to { transform: rotate(360deg) } }
-
 @keyframes overlay-in { from { opacity: 0 } to { opacity: 1 } }
 @keyframes stage-in { from { opacity: 0; transform: translateY(18px) scale(.985) } to { opacity: 1; transform: none } }
 
 @media (max-width: 680px) {
   html, body, #root { min-height: 100dvh; }
-  .widget-overlay { place-items: stretch; padding: 0; background: transparent; backdrop-filter: none; }
+  .widget-overlay { place-items: stretch; padding: 0; background: transparent; }
   .widget-stage { width: 100%; min-height: 100dvh; }
+  .pay-overlay { padding: 0; }
+  .pay-stage { width: 100%; min-height: 100dvh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .widget-overlay, .widget-stage { animation: none; }
-  .widget-waiting-spinner { animation-duration: 2400ms; }
+  .widget-overlay, .widget-stage, .pay-stage, .pay-refusal { animation: none !important; }
+  .pay-gate-spinner { animation-duration: 2400ms; }
 }
