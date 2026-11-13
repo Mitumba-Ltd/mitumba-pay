@@ -1,5 +1,12 @@
 # @mitumba/pay-react
 
+## 0.9.3
+
+### Patch Changes
+
+- 61067b5: `openMitumbaPay` keeps the store page visible behind the checkout. The frame uses the widget's light color scheme, so the browser no longer paints it opaque on a dark-scheme page. The overlay is a dimmed, blurred scrim that fades in, with no fade under reduced motion.
+- eb46ce0: `openMitumbaPay` now opens the hosted widget at `?session=<session_id>`, matching the session's `hosted_url`, so the widget starts in session mode directly. The client secret is still passed only through the INIT message.
+
 ## 0.9.2
 
 ### Patch Changes
