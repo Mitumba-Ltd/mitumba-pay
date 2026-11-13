@@ -285,3 +285,38 @@ describe('MitumbaPayWidget', () => {
     })
   })
 })
+
+describe('MitumbaPayWidget saving a number', () => {
+  const kenya = { callingCode: '+254', nationalLength: [9], example: '+254712345678' }
+  const saved = [{ label: 'M-Pesa ••• 678', value: '+254712345678', network: 'mpesa' }]
+
+  it('offers to save a new valid number, on by default, and sends the choice', () => {
+    const onPay = vi.fn()
+    render(<MitumbaPayWidget {...baseProps} onPay={onPay} phoneFormat={kenya} offerToSave />)
+    expect(screen.queryByLabelText('Save this number for next time')).toBeNull()
+
+    fireEvent.change(screen.getByLabelText(/^M-Pesa number/), { target: { value: '0733 331 042' } })
+    const save = screen.getByLabelText('Save this number for next time') as HTMLInputElement
+    expect(save.checked).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Pay KES 6,000.00' }))
+    expect(onPay).toHaveBeenLastCalledWith({ method: 'mobile_money', network: 'mpesa', phone: '+254733331042', save: true })
+
+    fireEvent.click(save)
+    fireEvent.click(screen.getByRole('button', { name: 'Pay KES 6,000.00' }))
+    expect(onPay).toHaveBeenLastCalledWith({ method: 'mobile_money', network: 'mpesa', phone: '+254733331042' })
+  })
+
+  it('does not offer to save a number that is already saved', () => {
+    const onPay = vi.fn()
+    render(<MitumbaPayWidget {...baseProps} onPay={onPay} phoneFormat={kenya} savedPhones={saved} defaultPhone="+254712345678" offerToSave />)
+    expect(screen.queryByLabelText('Save this number for next time')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Pay KES 6,000.00' }))
+    expect(onPay).toHaveBeenCalledWith({ method: 'mobile_money', network: 'mpesa', phone: '+254712345678' })
+  })
+
+  it('never offers it unless asked to', () => {
+    render(<MitumbaPayWidget {...baseProps} phoneFormat={kenya} />)
+    fireEvent.change(screen.getByLabelText(/^M-Pesa number/), { target: { value: '0733 331 042' } })
+    expect(screen.queryByLabelText('Save this number for next time')).toBeNull()
+  })
+})

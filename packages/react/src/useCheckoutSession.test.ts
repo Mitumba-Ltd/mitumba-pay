@@ -25,6 +25,7 @@ const contextBody = {
   cancel_url: null,
   expires_at: '2026-01-01T00:15:00Z',
   server_time: '2026-01-01T00:00:00Z',
+  saved_methods: [],
 }
 
 describe('useCheckoutSession', () => {
@@ -127,5 +128,47 @@ describe('useCheckoutSession', () => {
       await result.current.pay({ type: 'card' }, 'intent_2')
     })
     await waitFor(() => expect(result.current.phase).toBe('retryable'))
+  })
+})
+
+describe('useCheckoutSession saving a number', () => {
+  const attemptBody = {
+    version: 1,
+    id: 'att_1',
+    sequence: 1,
+    provider: 'daraja',
+    status: 'initiated',
+    terminal: false,
+    next_action: { type: 'await_confirmation' },
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  }
+  const paidStatus = {
+    version: 1,
+    session_id: 'cs_1',
+    session_status: 'complete',
+    checkout_status: 'paid',
+    terminal: true,
+    retryable: false,
+    latest_attempt: null,
+    server_time: '2026-01-01T00:00:05Z',
+    poll_after_ms: 1,
+  }
+  const attemptBodySent = async (options?: { saveMethod?: boolean }) => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse(attemptBody, 201)).mockResolvedValueOnce(jsonResponse(paidStatus))
+    const { result } = renderHook(() => useCheckoutSession({ fetch: fetchImpl }, 'cs_1', 'csec_1'))
+    await act(async () => {
+      await result.current.pay({ type: 'mobile_money', network: 'mpesa', phone: '+254712345678' }, 'intent_1', options)
+    })
+    return JSON.parse(String((fetchImpl.mock.calls[0]![1] as RequestInit).body))
+  }
+
+  it('asks to save the number when told to', async () => {
+    expect((await attemptBodySent({ saveMethod: true })).save_method).toBe(true)
+  })
+
+  it('does not ask otherwise', async () => {
+    expect(await attemptBodySent()).not.toHaveProperty('save_method')
+    expect(await attemptBodySent({ saveMethod: false })).not.toHaveProperty('save_method')
   })
 })
