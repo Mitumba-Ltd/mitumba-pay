@@ -27,6 +27,7 @@ export function context(over: Partial<CheckoutSessionContext> = {}): CheckoutSes
     cancel_url: null,
     expires_at: '2026-11-13T18:00:00Z',
     server_time: '2026-11-13T17:00:00Z',
+    saved_methods: [],
     ...over,
   }
 }

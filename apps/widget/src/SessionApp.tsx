@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import {
   MitumbaPayWidget,
   formatMoneyCode,
+  savedPhoneChoices,
   unavailableMessage,
   useCheckoutSession,
   type CheckoutPhase,
@@ -14,6 +15,7 @@ import {
   type WidgetMethod,
   type WidgetNetwork,
   type WidgetPayInput,
+  type WidgetSavedPhone,
 } from '@mitumba/pay-react'
 import { onInit, postToParent, readParentOrigin, CHILD_MESSAGE } from './session-bridge'
 import {
@@ -166,7 +168,7 @@ function SessionCheckout({
     }
     const method: SessionPaymentMethod =
       input.method === 'card' ? { type: 'card' } : { type: 'mobile_money', network: input.network, phone: input.phone }
-    void session.pay(method, idempotencyKey.current)
+    void session.pay(method, idempotencyKey.current, { saveMethod: input.method === 'mobile_money' && input.save === true })
   }
 
   return (
@@ -184,6 +186,10 @@ function SessionCheckout({
           methods={view.methods}
           networks={view.networks}
           phoneFormat={view.phoneFormat}
+          savedPhones={view.savedPhones}
+          defaultPhone={view.defaultPhone}
+          defaultNetwork={view.defaultNetwork}
+          offerToSave
           supportLabel="Available 24/7"
           onClose={onClose}
           onPay={pay}
@@ -236,6 +242,9 @@ export function widgetView(context: CheckoutSessionContext): {
   methods: WidgetMethod[]
   networks: WidgetNetwork[]
   phoneFormat: PhoneFormat | undefined
+  savedPhones: WidgetSavedPhone[]
+  defaultPhone: string | undefined
+  defaultNetwork: string | undefined
 } {
   const mobile = context.available_methods.flatMap((m) =>
     m.type === 'mobile_money' && m.network ? [{ ...m, network: m.network }] : [],
@@ -245,14 +254,21 @@ export function widgetView(context: CheckoutSessionContext): {
   if (mobile.length > 0) methods.push('mobile_money')
   if (card) methods.push('card')
   const phoneField = mobile.flatMap((m) => m.input_fields).find((f) => f.name === 'phone' && f.calling_code)
+  const networks = mobile.map((m) => ({ id: m.network, name: m.display_name, available: m.status === 'available' }))
+  // Saved numbers on a network that can take a payment now; the default one is preselected.
+  const payable = (context.saved_methods ?? []).filter((saved) => networks.some((n) => n.id === saved.method.network && n.available))
+  const preferred = payable.find((saved) => saved.is_default) ?? payable[0]
   return {
     amountLabel: formatMoneyCode(context.amount),
     lineItems: context.line_items.map((item) => ({ label: item.label, value: formatMoneyCode(item.amount) })),
     methods,
-    networks: mobile.map((m) => ({ id: m.network, name: m.display_name, available: m.status === 'available' })),
+    networks,
     phoneFormat: phoneField?.calling_code
       ? { callingCode: phoneField.calling_code, example: phoneField.example }
       : undefined,
+    savedPhones: savedPhoneChoices(payable, networks).map(({ label, value, network }) => ({ label, value, network })),
+    defaultPhone: preferred?.method.phone,
+    defaultNetwork: preferred?.method.network,
   }
 }
 
