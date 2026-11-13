@@ -215,3 +215,43 @@ describe('session status', () => {
     expect(() => checkoutSessionStatusResponseSchema.parse({ ...base, poll_after_ms: -1 })).toThrow()
   })
 })
+
+describe('saved numbers in a session', () => {
+  const context = {
+    version: PAY_CONTRACT_VERSION,
+    session_id: 'cs_1',
+    session_status: 'open' as const,
+    market: { code: 'KE', name: 'Kenya' },
+    amount: { currency: 'KES', minor_units: 125000 },
+    line_items: [],
+    reference: 'ord_1',
+    available_methods: [],
+    parent_origin: 'https://marketplace.example',
+    return_url: null,
+    cancel_url: null,
+    expires_at: '2026-01-01T00:15:00Z',
+    server_time: '2026-01-01T00:00:00Z',
+  }
+  const mpesa = { id: 'pm_1', label: 'M-Pesa', method: { type: 'mobile_money', network: 'mpesa', phone: '+254712345678' }, is_default: true }
+
+  it('reads a context without saved numbers as offering none', () => {
+    expect(checkoutSessionContextSchema.parse(context).saved_methods).toEqual([])
+  })
+
+  it('reads the saved numbers a context offers', () => {
+    expect(checkoutSessionContextSchema.parse({ ...context, saved_methods: [mpesa] }).saved_methods).toEqual([mpesa])
+  })
+
+  it('rejects a saved method that is not mobile money', () => {
+    expect(() =>
+      checkoutSessionContextSchema.parse({ ...context, saved_methods: [{ ...mpesa, method: { type: 'card' } }] }),
+    ).toThrow()
+  })
+
+  it('takes an attempt that asks to save its number', () => {
+    const attempt = { idempotency_key: 'k1', method: { type: 'mobile_money', network: 'mpesa', phone: '+254712345678' } }
+    expect(createAttemptInputSchema.parse({ ...attempt, save_method: true }).save_method).toBe(true)
+    expect(createAttemptInputSchema.parse(attempt).save_method).toBeUndefined()
+    expect(() => createAttemptInputSchema.parse({ ...attempt, save_method: 'yes' })).toThrow()
+  })
+})
