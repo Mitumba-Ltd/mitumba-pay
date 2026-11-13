@@ -37,3 +37,15 @@ export function formatMoney(money: Money, locale?: string, digits: number = curr
     return `${money.currency} ${fraction === undefined ? grouped : `${grouped}.${fraction}`}`
   }
 }
+
+/**
+ * Money with its ISO 4217 code first and grouped digits, e.g. `KES 6,150.00` or `UGX 25,000`. The
+ * same on every runtime and locale, unlike a currency symbol, so web and native show one label.
+ */
+export function formatMoneyCode(money: Money, digits: number = currencyDigits(money.currency)): string {
+  const fixed = (money.minor_units / 10 ** digits).toFixed(digits)
+  const negative = fixed.startsWith('-')
+  const [whole = '0', fraction] = (negative ? fixed.slice(1) : fixed).split('.')
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${money.currency} ${negative ? '-' : ''}${fraction === undefined ? grouped : `${grouped}.${fraction}`}`
+}
