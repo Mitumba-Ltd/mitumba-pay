@@ -171,7 +171,7 @@ function SessionCheckout({
   }
 
   return (
-    <main className="pay-overlay" onMouseDown={handleBackdrop}>
+    <main className="pay-overlay is-anchored" onMouseDown={handleBackdrop}>
       <div className="pay-stage">
         <MitumbaPayWidget
           checkout={asWidgetCheckout(session)}
@@ -297,7 +297,7 @@ export function SecureSheet({
     )
   }
   return (
-    <main className="pay-overlay">
+    <main className="pay-overlay is-anchored">
       <section className="pay-refusal" role="alertdialog" aria-labelledby="pay-refusal-title" aria-describedby="pay-refusal-reason">
         <span className="pay-refusal-mark" aria-hidden="true">M</span>
         <h1 id="pay-refusal-title">Mitumba Pay</h1>
