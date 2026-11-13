@@ -31,12 +31,15 @@ afterEach(() => {
 })
 
 describe('openMitumbaPay', () => {
-  it('mounts a full-viewport overlay with a parent_origin query param', () => {
+  it('mounts a full-viewport overlay with session and parent_origin query params', () => {
     const promise = openMitumbaPay({ sessionId: 'cs_1', clientSecret: 'csec_1' })
     const iframe = getIframe()
     const src = new URL(iframe.src)
     expect(src.origin).toBe(WIDGET_ORIGIN)
+    expect(src.searchParams.get('session')).toBe('cs_1')
     expect(src.searchParams.get('parent_origin')).toBe(window.location.origin)
+    // The client secret is never placed in the URL.
+    expect(iframe.src).not.toContain('csec_1')
     expect(document.body.style.overflow).toBe('hidden')
     // settle to avoid a dangling promise
     messageFromWidget(iframe, MITUMBA_PAY_MESSAGE.close)
