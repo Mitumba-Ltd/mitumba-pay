@@ -22,6 +22,7 @@ export type {
   SessionPhase,
   UseCheckoutSessionState,
   UseCheckoutSessionResult,
+  PayOptions,
 } from './useCheckoutSession'
 export { MitumbaPaySessionSheet } from './MitumbaPaySessionSheet'
 export type { MitumbaPaySessionSheetProps } from './MitumbaPaySessionSheet'

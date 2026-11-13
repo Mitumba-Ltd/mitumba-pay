@@ -54,6 +54,13 @@ declare module 'react-native' {
     children?: ReactNode
   }
 
+  export interface SwitchProps extends ViewProps {
+    value?: boolean
+    onValueChange?: (value: boolean) => void
+    disabled?: boolean
+    trackColor?: { true?: string; false?: string }
+  }
+
   export interface ActivityIndicatorProps {
     color?: string
     size?: 'small' | 'large' | number
@@ -66,6 +73,7 @@ declare module 'react-native' {
   export const Pressable: ComponentType<PressableProps>
   export const Modal: ComponentType<ModalProps>
   export const ActivityIndicator: ComponentType<ActivityIndicatorProps>
+  export const Switch: ComponentType<SwitchProps>
 
   export const StyleSheet: {
     create<T extends Record<string, StyleValue>>(styles: T): T
