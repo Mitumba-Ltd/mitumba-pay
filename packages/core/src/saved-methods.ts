@@ -15,7 +15,7 @@ export interface SavedPhoneChoice {
 }
 
 /**
- * Saved methods as picker choices, default first, with the number hidden down to its last three
+ * Saved methods (from the payment-methods API or a session's `saved_methods`) as picker choices, default first, with the number hidden down to its last three
  * digits so the label is safe to show on a shared screen.
  *
  * Pass the market's `mobile_money_networks` so a buyer-chosen label still says which network the
@@ -23,7 +23,7 @@ export interface SavedPhoneChoice {
  * unless the buyer renamed it.
  */
 export function savedPhoneChoices(
-  methods: readonly SavedPaymentMethod[],
+  methods: readonly Pick<SavedPaymentMethod, 'label' | 'method' | 'is_default'>[],
   networks: readonly MobileMoneyNetwork[] = [],
 ): SavedPhoneChoice[] {
   return [...methods]
