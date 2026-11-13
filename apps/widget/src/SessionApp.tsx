@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import {
   MitumbaPayWidget,
-  currencyDigits,
-  formatMoney,
+  formatMoneyCode,
   unavailableMessage,
   useCheckoutSession,
   type CheckoutPhase,
@@ -230,24 +229,6 @@ export function asWidgetCheckout(session: UseCheckoutSessionResult): UseCheckout
   }
 }
 
-/** Money as the hosted card shows it: currency code first, e.g. `KES 6,000.00`. */
-export function moneyLabel(money: CheckoutSessionContext['amount']): string {
-  const digits = currencyDigits(money.currency)
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: money.currency,
-      currencyDisplay: 'code',
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
-    })
-      .format(money.minor_units / 10 ** digits)
-      .replace(/\u00a0/g, ' ')
-  } catch {
-    return formatMoney(money)
-  }
-}
-
 /** Widget props from the authoritative session context only. */
 export function widgetView(context: CheckoutSessionContext): {
   amountLabel: string
@@ -265,8 +246,8 @@ export function widgetView(context: CheckoutSessionContext): {
   if (card) methods.push('card')
   const phoneField = mobile.flatMap((m) => m.input_fields).find((f) => f.name === 'phone' && f.calling_code)
   return {
-    amountLabel: moneyLabel(context.amount),
-    lineItems: context.line_items.map((item) => ({ label: item.label, value: moneyLabel(item.amount) })),
+    amountLabel: formatMoneyCode(context.amount),
+    lineItems: context.line_items.map((item) => ({ label: item.label, value: formatMoneyCode(item.amount) })),
     methods,
     networks: mobile.map((m) => ({ id: m.network, name: m.display_name, available: m.status === 'available' })),
     phoneFormat: phoneField?.calling_code

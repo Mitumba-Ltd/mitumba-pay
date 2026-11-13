@@ -1,4 +1,4 @@
-import type { CheckoutSessionContext } from '@mitumba/pay-react'
+import { sessionRefusal, type CheckoutSessionContext } from '@mitumba/pay-react'
 
 /**
  * Checks the hosted widget runs before it renders any payment UI. Each one is a real condition of
@@ -98,34 +98,16 @@ export function checkMerchant(context: CheckoutSessionContext, parentOrigin: str
   return null
 }
 
-/** Still open, and not past its expiry by the server's clock. */
+/** Still open, and not past its expiry by the server's clock. Shared with the native sheet. */
 export function checkSession(context: CheckoutSessionContext): string | null {
-  switch (context.session_status) {
-    case 'complete':
-      return 'This order is already paid.'
-    case 'expired':
-      return 'This payment has expired. Close this window and check out again.'
-    case 'cancelled':
-      return 'This payment was cancelled. Close this window and check out again.'
-    default:
-      break
-  }
-  const expires = Date.parse(context.expires_at)
-  const now = Date.parse(context.server_time)
-  if (Number.isFinite(expires) && Number.isFinite(now) && expires <= now) {
-    return 'This payment has expired. Close this window and check out again.'
-  }
-  return null
+  const refusal = sessionRefusal(context)
+  return refusal && refusal.code !== 'no_payable_method' ? refusal.message : null
 }
 
-/** At least one method the widget can take a payment with now. */
+/** At least one method the widget can take a payment with now. Shared with the native sheet. */
 export function checkMethods(context: CheckoutSessionContext): string | null {
-  const payable = context.available_methods.some(
-    (method) =>
-      method.status === 'available' &&
-      (method.type === 'card' || (method.type === 'mobile_money' && Boolean(method.network))),
-  )
-  return payable ? null : 'No payment method is available for this order right now. Please try again shortly.'
+  const refusal = sessionRefusal(context)
+  return refusal?.code === 'no_payable_method' ? refusal.message : null
 }
 
 export function pendingChecks(): SecureCheck[] {

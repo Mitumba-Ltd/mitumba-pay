@@ -31,8 +31,10 @@ export { unavailableMessage } from './unavailable'
 export { payTheme } from './theme'
 export type { PayTheme } from './theme'
 
-export { MitumbaPay, PayError, currencyDigits, isValidPhone, nationalPart, normalizePhone } from '@mitumba/pay'
+export { MitumbaPay, PayError, currencyDigits, formatMoneyCode, isValidPhone, nationalPart, normalizePhone, sessionRefusal } from '@mitumba/pay'
 export type {
+  SessionRefusal,
+  SessionRefusalCode,
   MitumbaPayConfig,
   InitiateCheckoutInput,
   CheckoutStatusResponse,

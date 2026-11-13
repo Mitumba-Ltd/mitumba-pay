@@ -57,11 +57,15 @@ export {
   PayError,
   currencyDigits,
   formatMoney,
+  formatMoneyCode,
   isValidPhone,
   nationalPart,
   normalizePhone,
+  sessionRefusal,
 } from '@mitumba/pay'
 export type {
+  SessionRefusal,
+  SessionRefusalCode,
   MitumbaPayConfig,
   InitiateCheckoutInput,
   CheckoutStatusResponse,

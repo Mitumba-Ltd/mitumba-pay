@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Modal,
   View,
@@ -10,7 +10,7 @@ import {
   StyleSheet,
 } from 'react-native'
 import type { CheckoutInputField } from '@mitumba/pay'
-import { methodDescriptorKey } from '@mitumba/pay'
+import { formatMoneyCode, methodDescriptorKey, sessionRefusal, type SessionRefusal } from '@mitumba/pay'
 import { descriptorPhone, sessionMethodFor } from './methods'
 import { payTheme as t } from './theme'
 import { formatMoney } from './formatMoney'
@@ -40,8 +40,13 @@ export interface MitumbaPaySessionSheetProps {
   idempotencyKey: () => string
   onClose: () => void
   title?: string
-  /** BCP 47 locale for amounts, from the host's market (e.g. `en-KE`). Defaults to the device locale. */
+  /**
+   * BCP 47 locale for amounts. Without one, amounts show the currency code first (`KES 6,150.00`),
+   * as the hosted web checkout does.
+   */
   locale?: string
+  /** Called once when the loaded session cannot be paid (already paid, expired, cancelled, no method). */
+  onRefused?: (refusal: SessionRefusal) => void
 }
 
 /**
@@ -58,6 +63,7 @@ export function MitumbaPaySessionSheet({
   onClose,
   title = 'Choose how to pay',
   locale,
+  onRefused,
 }: MitumbaPaySessionSheetProps) {
   const { phase, context, error } = checkout
   const methods = context?.available_methods ?? []
@@ -106,9 +112,18 @@ export function MitumbaPaySessionSheet({
     void checkout.pay(method, idempotencyKey())
   }
 
-  const amountLabel = context
-    ? formatMoney(context.amount, locale)
-    : ''
+  const money = (value: Parameters<typeof formatMoneyCode>[0]) => (locale ? formatMoney(value, locale) : formatMoneyCode(value))
+  const amountLabel = context ? money(context.amount) : ''
+
+  // Judge the loaded session before offering any method; a refusal replaces the form.
+  const refusal = useMemo(() => (context ? sessionRefusal(context) : null), [context])
+  // Tell the host once per refusal, not on every render.
+  const notified = useRef<string | null>(null)
+  useEffect(() => {
+    if (!refusal || notified.current === refusal.code) return
+    notified.current = refusal.code
+    onRefused?.(refusal)
+  }, [refusal, onRefused])
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -149,7 +164,7 @@ export function MitumbaPaySessionSheet({
                     <Text style={styles.lineLabel}>{item.label}</Text>
                     <View style={styles.dots} />
                     <Text style={styles.lineValue}>
-                      {formatMoney(item.amount, locale)}
+                      {money(item.amount)}
                     </Text>
                   </View>
                 ))}
@@ -162,7 +177,14 @@ export function MitumbaPaySessionSheet({
             <View style={styles.handle} />
             <Text style={styles.title}>{done ? 'Payment complete' : title}</Text>
 
-            {phase === 'loading_context' || (busy && !done) ? (
+            {refusal && !done ? (
+              <>
+                <Outcome message={refusal.message} refused />
+                <Pressable accessibilityRole="button" onPress={onClose} style={styles.payButton}>
+                  <Text style={styles.payButtonText}>Close</Text>
+                </Pressable>
+              </>
+            ) : phase === 'loading_context' || (busy && !done) ? (
               <Outcome message={message} loading />
             ) : done ? (
               <Outcome message={message} success />
@@ -277,14 +299,14 @@ function Field({
   )
 }
 
-function Outcome({ message, success, loading }: { message: string; success?: boolean; loading?: boolean }) {
+function Outcome({ message, success, loading, refused }: { message: string; success?: boolean; loading?: boolean; refused?: boolean }) {
   return (
     <View style={styles.outcome} accessibilityLiveRegion="polite">
-      <View style={[styles.outcomeIcon, success ? styles.outcomeSuccess : null]}>
+      <View style={[styles.outcomeIcon, success ? styles.outcomeSuccess : null, refused ? styles.outcomeRefused : null]}>
         {loading ? (
           <ActivityIndicator color={t.color.green} />
         ) : (
-          <Text style={[styles.outcomeIconText, success ? styles.outcomeSuccessText : null]}>✓</Text>
+          <Text style={[styles.outcomeIconText, success ? styles.outcomeSuccessText : null, refused ? styles.outcomeRefusedText : null]}>{refused ? '!' : '✓'}</Text>
         )}
       </View>
       <Text style={styles.outcomeMessage}>{message}</Text>
@@ -436,6 +458,8 @@ const styles = StyleSheet.create({
   outcomeSuccess: { backgroundColor: t.color.green },
   outcomeIconText: { color: t.color.green, fontSize: 28, fontWeight: '800' },
   outcomeSuccessText: { color: t.color.onGreen },
+  outcomeRefused: { backgroundColor: t.color.dangerSoft },
+  outcomeRefusedText: { color: t.color.danger },
   outcomeMessage: { maxWidth: 280, marginTop: 18, color: t.color.muted, fontSize: 13, lineHeight: 20, textAlign: 'center' },
 })
 
