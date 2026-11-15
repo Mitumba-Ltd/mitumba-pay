@@ -296,7 +296,7 @@ export function SecureSheet({
   return (
     <main className="pay-overlay is-anchored">
       <section className="pay-refusal" role="alertdialog" aria-labelledby="pay-refusal-title" aria-describedby="pay-refusal-reason">
-        <span className="pay-refusal-mark" aria-hidden="true">M</span>
+        <img className="pay-refusal-logo" src="/widget/mitumba-pay-logo.png" alt="" aria-hidden="true" width={392} height={259} />
         <h1 id="pay-refusal-title">Mitumba Pay</h1>
         <p id="pay-refusal-reason" role="alert">{failure.reason}</p>
         <button type="button" className="pay-refusal-close" onClick={onClose}>Close</button>
