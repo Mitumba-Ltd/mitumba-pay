@@ -44,7 +44,7 @@ button, input { font: inherit; }
 .pay-gate-spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.28); border-top-color: #ffffff; animation: widget-spin 800ms linear infinite; }
 
 .pay-refusal { box-sizing: border-box; width: min(380px, 100%); padding: 28px 26px 20px; border-radius: 24px; background: #fff; color: #172019; text-align: center; box-shadow: 0 32px 90px rgba(18,39,25,.24); animation: stage-in 260ms cubic-bezier(.2,.8,.2,1); }
-.pay-refusal-mark { display: grid; place-items: center; width: 48px; height: 48px; margin: 0 auto 14px; border-radius: 14px; background: #3D9A52; color: #fff; font-weight: 800; font-size: 21px; }
+.pay-refusal-logo { display: block; width: 104px; height: auto; margin: 0 auto 14px; object-fit: contain; }
 .pay-refusal h1 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
 .pay-refusal p { margin: 10px 0 18px; color: #a13a30; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .pay-refusal-close { width: 100%; min-height: 48px; border: 0; border-radius: 4px; background: #3D9A52; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
