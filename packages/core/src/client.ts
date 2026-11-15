@@ -126,6 +126,21 @@ export class MitumbaPay {
   }
 
   /**
+   * Redeem a payment link's opaque token (`/i/<token>`) for a checkout session. Needs no sign-in:
+   * the token is the credential, so no bearer token is sent. The session it opens offers no saved
+   * numbers. A link that cannot pay throws a `PayError` with code `not_found`; one whose order is
+   * already paid, `order_not_payable`.
+   */
+  async redeemPaymentLink(token: string, options?: RequestOptions): Promise<CreateCheckoutSessionResponse> {
+    const raw = await this.http.post<unknown>(
+      `/pay/payment-links/${encodeURIComponent(token)}/session`,
+      undefined,
+      { ...options, token: '' },
+    )
+    return createCheckoutSessionResponseSchema.parse(raw)
+  }
+
+  /**
    * Read the authoritative, immutable display context for a session (market,
    * amount, line items, server-authored available methods). Authenticated with
    * the session `clientSecret`. The UI must render only the methods returned

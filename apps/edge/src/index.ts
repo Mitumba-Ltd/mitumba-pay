@@ -4,8 +4,9 @@
  * This Worker owns the hostname and routes by path. For `/widget` and
  * `/widget/*` it reverse-proxies to the widget's Cloudflare Pages deployment
  * (WIDGET_ORIGIN) — the domain is NOT bound to Pages directly; the Worker
- * fetches from the Pages URL and returns the response. Other paths are open for
- * future routing (landing page, API proxy, etc.).
+ * fetches from the Pages URL and returns the response. `/i/<token>` serves the
+ * widget's page for an invoice payment link. Other paths are open for future
+ * routing (landing page, API proxy, etc.).
  */
 
 export interface Env {
@@ -31,6 +32,12 @@ export default {
 
     if (pathname === '/widget' || pathname === '/widget/' || pathname.startsWith('/widget/')) {
       return proxyWidget(request, url, env)
+    }
+
+    // A payment link, /i/<token>: the widget's page, which reads the token from the path. The token
+    // is a credential, so the page is never cached, never framed, and never sends it on as a referrer.
+    if (request.method === 'GET' && /^\/i\/[A-Za-z0-9_-]+\/?$/.test(pathname)) {
+      return paymentLinkPage(request, env)
     }
 
     if (pathname === '/' || pathname === '') {
@@ -70,6 +77,19 @@ async function proxyWidget(request: Request, url: URL, env: Env): Promise<Respon
   }
 
   return proxied
+}
+
+async function paymentLinkPage(request: Request, env: Env): Promise<Response> {
+  const origin = stripTrailingSlashes(env.WIDGET_ORIGIN)
+  const page = await fetchOrigin(request, `${origin}/index.html`)
+  if (!page.ok) return new Response('Payment page unavailable', { status: 502 })
+  const headers = withHtmlType(stripHopByHop(page.headers))
+  headers.set('cache-control', 'no-store')
+  headers.set('referrer-policy', 'no-referrer')
+  headers.set('x-frame-options', 'DENY')
+  headers.set('content-security-policy', "frame-ancestors 'none'")
+  headers.set('x-robots-tag', 'noindex, nofollow')
+  return new Response(page.body, { status: 200, headers })
 }
 
 async function fetchOrigin(request: Request, target: string): Promise<Response> {

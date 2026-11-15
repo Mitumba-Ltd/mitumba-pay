@@ -111,7 +111,7 @@ export function WaitingCard({ timedOut, onClose }: { timedOut: boolean; onClose:
 
 const BUSY_PHASES: readonly SessionPhase[] = ['initiating', 'awaiting_confirmation', 'redirecting', 'polling']
 
-function SessionCheckout({
+export function SessionCheckout({
   parentOrigin,
   sessionId,
   clientSecret,
