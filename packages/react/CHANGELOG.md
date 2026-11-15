@@ -1,5 +1,13 @@
 # @mitumba/pay-react
 
+## 0.9.6
+
+### Patch Changes
+
+- 32e5d51: `PayError.message` is a plain buyer-facing sentence for documented error codes when the response carries no message, instead of the code itself (for example `order_not_payable`). `code` is unchanged. The messages are exported as `PAY_ERROR_MESSAGES`.
+- Updated dependencies [32e5d51]
+  - @mitumba/pay@0.5.5
+
 ## 0.9.5
 
 ### Patch Changes
