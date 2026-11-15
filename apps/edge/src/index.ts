@@ -67,7 +67,7 @@ async function proxyWidget(request: Request, url: URL, env: Env): Promise<Respon
   // as files on Pages. Serve the widget's index.html so client-side routing can
   // resolve them, without changing this router later.
   if (proxied.status === 404 && request.method === 'GET' && isDocumentRequest(request)) {
-    const indexResp = await fetchOrigin(request, `${origin}/index.html`)
+    const indexResp = await fetchOrigin(request, `${origin}/`)
     if (indexResp.ok) {
       return new Response(indexResp.body, {
         status: 200,
@@ -81,7 +81,9 @@ async function proxyWidget(request: Request, url: URL, env: Env): Promise<Respon
 
 async function paymentLinkPage(request: Request, env: Env): Promise<Response> {
   const origin = stripTrailingSlashes(env.WIDGET_ORIGIN)
-  const page = await fetchOrigin(request, `${origin}/index.html`)
+  // The page is the widget's root document. Pages answers /index.html with a 308 to `/`, and this
+  // Worker does not follow redirects, so the root is asked for directly.
+  const page = await fetchOrigin(request, `${origin}/`)
   if (!page.ok) return new Response('Payment page unavailable', { status: 502 })
   const headers = withHtmlType(stripHopByHop(page.headers))
   headers.set('cache-control', 'no-store')
