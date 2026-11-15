@@ -61,6 +61,31 @@ describe('MitumbaPay sessions', () => {
     expect(authHeader(call)).toBe('Bearer buyer_tok')
   })
 
+  it('redeems a payment link without any bearer token, even when the client has one', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        version: 1,
+        session_id: 'cs_link',
+        client_secret: 'csec_link',
+        expires_at: '2026-01-01T00:15:00Z',
+        hosted_url: 'https://pay.mitumba.africa/widget?session=cs_link',
+      }, 201),
+    )
+    const pay = new MitumbaPay({ fetch: fetchImpl, token: 'buyer_tok' })
+    const res = await pay.redeemPaymentLink('tok/with space')
+    expect(res).toMatchObject({ session_id: 'cs_link', client_secret: 'csec_link' })
+    const call = fetchImpl.mock.calls[0]!
+    expect(call[0]).toBe('https://api.mitumba.africa/pay/payment-links/tok%2Fwith%20space/session')
+    expect((call[1] as RequestInit).method).toBe('POST')
+    expect(authHeader(call)).toBeNull()
+  })
+
+  it('throws not_found for a link that cannot pay', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ error: 'not_found' }, 404))
+    const pay = new MitumbaPay({ fetch: fetchImpl })
+    await expect(pay.redeemPaymentLink('gone')).rejects.toMatchObject({ status: 404, code: 'not_found' })
+  })
+
   it('reads session context with the client secret, not the buyer token', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
