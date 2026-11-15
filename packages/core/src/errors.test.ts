@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { MitumbaPay, PayError, parseRetryAfter } from './index'
+import { MitumbaPay, PAY_ERROR_MESSAGES, PayError, parseRetryAfter } from './index'
 
 function response(body: unknown, status: number, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -93,5 +93,22 @@ describe('HTTP 503 handling', () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(2)
     expect(error.status).toBe(404)
+  })
+})
+
+describe('PayError message', () => {
+  it('keeps the server message when there is one', () => {
+    expect(new PayError(409, { error: 'order_not_payable', message: 'Custom.' }).message).toBe('Custom.')
+  })
+
+  it('tells the buyer in words for a documented code without a message, keeping the code', () => {
+    const error = new PayError(409, { error: 'order_not_payable' })
+    expect(error.message).toBe(PAY_ERROR_MESSAGES.order_not_payable)
+    expect(error.message).not.toContain('order_not_payable')
+    expect(error.code).toBe('order_not_payable')
+  })
+
+  it('falls back to the code for an undocumented one', () => {
+    expect(new PayError(418, { error: 'teapot' }).message).toBe('teapot')
   })
 })
