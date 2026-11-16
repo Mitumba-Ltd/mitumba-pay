@@ -16,6 +16,7 @@ import { descriptorPhone, sessionMethodFor } from './methods'
 import { payTheme as t } from './theme'
 import { formatMoney } from './formatMoney'
 import { unavailableMessage } from './unavailable'
+import { BrandLogo } from './BrandLogo'
 import { type UseCheckoutSessionResult, type SessionPhase } from './useCheckoutSession'
 
 const PHASE_MESSAGE: Record<SessionPhase, string> = {
@@ -165,7 +166,7 @@ export function MitumbaPaySessionSheet({
           <View style={styles.hero}>
             <View style={styles.heroHeader}>
               <View style={styles.brand}>
-                <Text style={styles.brandMark}>M</Text>
+                <BrandLogo />
                 <Text style={styles.brandText}>Mitumba Pay</Text>
               </View>
               <Pressable
@@ -387,16 +388,6 @@ const styles = StyleSheet.create({
   hero: { position: 'relative', paddingTop: t.space.lg, paddingHorizontal: t.space.lg, paddingBottom: 50 },
   heroHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: t.space.sm },
-  brandMark: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    color: t.color.onGreen,
-    fontWeight: '800',
-  },
   brandText: { color: t.color.onGreen, fontSize: 14, fontWeight: '700' },
   closeButton: {
     width: 38,
