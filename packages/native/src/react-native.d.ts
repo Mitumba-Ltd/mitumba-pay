@@ -66,7 +66,17 @@ declare module 'react-native' {
     size?: 'small' | 'large' | number
   }
 
+  export interface ImageProps {
+    source: { uri: string } | number
+    style?: StyleValue
+    resizeMode?: 'cover' | 'contain' | 'stretch' | 'center'
+    accessible?: boolean
+    accessibilityLabel?: string
+    accessibilityIgnoresInvertColors?: boolean
+  }
+
   export const View: ComponentType<ViewProps>
+  export const Image: ComponentType<ImageProps>
   export const Text: ComponentType<TextProps>
   export const TextInput: ComponentType<TextInputProps>
   export const ScrollView: ComponentType<ScrollViewProps>
