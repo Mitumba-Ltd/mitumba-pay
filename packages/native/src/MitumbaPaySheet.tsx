@@ -136,7 +136,7 @@ export function MitumbaPaySheet({
           <View style={styles.hero}>
             <View style={styles.heroPattern} />
             <View style={styles.heroHeader}>
-              <View style={styles.brand}><BrandLogo /><Text style={styles.brandText}>Mitumba Pay</Text></View>
+              <View style={styles.brand}><BrandLogo height={44} /></View>
               <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close payment" style={styles.closeButton}><Text style={styles.closeText}>×</Text></Pressable>
             </View>
             <Text style={styles.eyebrow}>AMOUNT DUE</Text>
@@ -258,7 +258,6 @@ const styles = StyleSheet.create({
   heroPattern: { position: 'absolute', top: -80, right: -60, width: 220, height: 220, borderRadius: 110, borderWidth: 34, borderColor: 'rgba(255,255,255,0.055)' },
   heroHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: t.space.sm },
-  brandText: { color: t.color.onGreen, fontSize: 14, fontWeight: '700' },
   closeButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.13)', alignItems: 'center', justifyContent: 'center' },
   closeText: { color: t.color.onGreen, fontSize: 25, lineHeight: 27, fontWeight: '300' },
   eyebrow: { marginTop: 26, color: t.color.onGreenMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1.5, textAlign: 'center' },
