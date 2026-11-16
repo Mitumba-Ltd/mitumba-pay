@@ -1,5 +1,11 @@
 # @mitumba/pay-native
 
+## 0.6.7
+
+### Patch Changes
+
+- 2b17067: The payment sheets show the Mitumba Pay logo on a white badge in the header, in place of the letter mark.
+
 ## 0.6.6
 
 ### Patch Changes
