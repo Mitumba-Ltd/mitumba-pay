@@ -184,6 +184,7 @@ export function SessionCheckout({
           merchantName="Mitumba"
           logoUrl="/widget/mitumba-pay-logo.png"
           methods={view.methods}
+          unavailableMethods={view.unavailableMethods}
           networks={view.networks}
           phoneFormat={view.phoneFormat}
           savedPhones={view.savedPhones}
@@ -240,6 +241,7 @@ export function widgetView(context: CheckoutSessionContext): {
   amountLabel: string
   lineItems: { label: string; value: string }[]
   methods: WidgetMethod[]
+  unavailableMethods: WidgetMethod[]
   networks: WidgetNetwork[]
   phoneFormat: PhoneFormat | undefined
   savedPhones: WidgetSavedPhone[]
@@ -249,10 +251,12 @@ export function widgetView(context: CheckoutSessionContext): {
   const mobile = context.available_methods.flatMap((m) =>
     m.type === 'mobile_money' && m.network ? [{ ...m, network: m.network }] : [],
   )
-  const card = context.available_methods.find((m) => m.type === 'card' && m.status === 'available')
+  const card = context.available_methods.find((m) => m.type === 'card')
   const methods: WidgetMethod[] = []
   if (mobile.length > 0) methods.push('mobile_money')
-  if (card) methods.push('card')
+  if (card?.status === 'available') methods.push('card')
+  // Card offered here but switched off: shown greyed, never payable.
+  const unavailableMethods: WidgetMethod[] = card && card.status !== 'available' ? ['card'] : []
   const phoneField = mobile.flatMap((m) => m.input_fields).find((f) => f.name === 'phone' && f.calling_code)
   const networks = mobile.map((m) => ({ id: m.network, name: m.display_name, available: m.status === 'available' }))
   // Saved numbers on a network that can take a payment now; the default one is preselected.
@@ -262,6 +266,7 @@ export function widgetView(context: CheckoutSessionContext): {
     amountLabel: formatMoneyCode(context.amount),
     lineItems: context.line_items.map((item) => ({ label: item.label, value: formatMoneyCode(item.amount) })),
     methods,
+    unavailableMethods,
     networks,
     phoneFormat: phoneField?.calling_code
       ? { callingCode: phoneField.calling_code, example: phoneField.example }
