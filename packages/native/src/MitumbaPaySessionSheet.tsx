@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import type { CheckoutInputField } from '@mitumba/pay'
 import { formatMoneyCode, methodDescriptorKey, savedPhoneChoices, sessionRefusal, type SessionRefusal } from '@mitumba/pay'
-import { descriptorPhone, sessionMethodFor } from './methods'
+import { descriptorPhone, initialSessionMethod, sessionMethodFor, sessionMethodTabs } from './methods'
 import { payTheme as t } from './theme'
 import { formatMoney } from './formatMoney'
 import { unavailableMessage } from './unavailable'
@@ -21,18 +21,18 @@ import { type UseCheckoutSessionResult, type SessionPhase } from './useCheckoutS
 
 const PHASE_MESSAGE: Record<SessionPhase, string> = {
   idle: '',
-  loading_context: 'Loading secure checkout…',
+  loading_context: 'Loading secure checkoutâ€¦',
   ready: '',
-  initiating: 'Starting your secure payment…',
+  initiating: 'Starting your secure paymentâ€¦',
   awaiting_confirmation: 'Check your phone and enter your PIN to approve.',
-  redirecting: 'Opening secure checkout…',
-  polling: 'We’re confirming your payment…',
+  redirecting: 'Opening secure checkoutâ€¦',
+  polling: 'Weâ€™re confirming your paymentâ€¦',
   paid: 'Payment received. Your order is confirmed.',
-  failed: 'That payment didn’t go through.',
-  retryable: 'Payment wasn’t completed. You can safely try again.',
+  failed: 'That payment didnâ€™t go through.',
+  retryable: 'Payment wasnâ€™t completed. You can safely try again.',
   timeout: 'Still confirming. Keep this sheet open or check your order shortly.',
   unavailable: unavailableMessage(null),
-  error: 'We couldn’t load or start the payment.',
+  error: 'We couldnâ€™t load or start the payment.',
 }
 
 export interface MitumbaPaySessionSheetProps {
@@ -57,13 +57,18 @@ export interface MitumbaPaySessionSheetProps {
  * server-authored `available_methods` — provider names never appear and the
  * client never asserts amount, currency, country, or methods. The buyer picks
  * one method; the backend picks the provider; the UI follows `next_action`.
+ *
+ * The layout follows the hosted web checkout on a phone: a green summary (logo, amount due, lines,
+ * total), then a white panel with "Mobile payment" and "Card" tabs. Mobile payment shows the
+ * networks as chips, saved numbers, and the number field. A method the session marks temporarily
+ * unavailable stays visible but greyed.
  */
 export function MitumbaPaySessionSheet({
   visible,
   checkout,
   idempotencyKey,
   onClose,
-  title = 'Choose how to pay',
+  title = 'Payment methods',
   locale,
   onRefused,
 }: MitumbaPaySessionSheetProps) {
@@ -76,26 +81,35 @@ export function MitumbaPaySessionSheet({
   const [saveNumber, setSaveNumber] = useState(true)
   const saved = context?.saved_methods ?? []
 
+  const tabs = useMemo(() => sessionMethodTabs(methods), [methods])
+  const networks = useMemo(() => methods.filter((m) => m.type === 'mobile_money' && m.network), [methods])
+
   // Once context loads, preselect the default saved number (its network and phone) when it can be
-  // paid now, else the first available method.
+  // paid now, else the first payable method.
   useEffect(() => {
     if (selectedKey || methods.length === 0) return
     const preferred = saved.find((entry) => entry.is_default) ?? saved[0]
-    const network = preferred
-      ? methods.find((m) => m.type === 'mobile_money' && m.network === preferred.method.network && m.status === 'available')
-      : undefined
-    if (preferred && network) {
-      setSelectedKey(methodDescriptorKey(network))
+    const initial = initialSessionMethod(methods, preferred?.method.network)
+    if (!initial) return
+    setSelectedKey(methodDescriptorKey(initial))
+    if (preferred && initial.network === preferred.method.network) {
       setFieldValues((prev) => ({ ...prev, phone: preferred.method.phone }))
-      return
     }
-    setSelectedKey(methodDescriptorKey(methods[0]!))
   }, [methods, saved, selectedKey])
 
   const selected = useMemo(
     () => methods.find((m) => methodDescriptorKey(m) === selectedKey) ?? null,
     [methods, selectedKey],
   )
+  const activeTab = selected?.type === 'card' ? 'card' : 'mobile_money'
+
+  const chooseTab = (type: 'mobile_money' | 'card') => {
+    if (type === activeTab) return
+    const next = type === 'card'
+      ? methods.find((m) => m.type === 'card' && m.status === 'available')
+      : initialSessionMethod(networks, undefined)
+    if (next) setSelectedKey(methodDescriptorKey(next))
+  }
 
   const busy =
     phase === 'loading_context' ||
@@ -121,7 +135,10 @@ export function MitumbaPaySessionSheet({
   const methodUnavailable = selected?.status === 'temporarily_unavailable'
   // The selected network's saved numbers, as one-tap choices.
   const savedHere = selected?.type === 'mobile_money' && selected.network
-    ? savedPhoneChoices(saved.filter((entry) => entry.method.network === selected.network))
+    ? savedPhoneChoices(
+        saved.filter((entry) => entry.method.network === selected.network),
+        networks.map((m) => ({ id: m.network ?? '', name: m.display_name })),
+      )
     : []
   const typedPhone = selected ? descriptorPhone(selected, fieldValues) : null
   // Offer to save a valid mobile-money number that is not already saved on this network.
@@ -148,6 +165,9 @@ export function MitumbaPaySessionSheet({
     onRefused?.(refusal)
   }, [refusal, onRefused])
 
+  const phoneField = selected?.input_fields.find((f) => f.name === 'phone')
+  const otherFields = selected && !methodUnavailable ? selected.input_fields.filter((f) => f.name !== 'phone') : []
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.scrim}>
@@ -164,10 +184,25 @@ export function MitumbaPaySessionSheet({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.hero}>
-            <View style={styles.heroHeader}>
-              <View style={styles.brand}>
-                <BrandLogo />
-                <Text style={styles.brandText}>Mitumba Pay</Text>
+            <BrandLogo height={52} />
+            <Text style={styles.eyebrow}>AMOUNT DUE</Text>
+            <Text style={styles.amount}>{amountLabel}</Text>
+            {context && context.line_items.length > 0 ? (
+              <View style={styles.lines} accessibilityLabel="Order summary">
+                {context.line_items.map((item) => (
+                  <SummaryLine key={item.label} label={item.label} value={money(item.amount)} />
+                ))}
+                <View style={styles.rule} />
+                <SummaryLine label="Total" value={amountLabel} strong />
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.sheet}>
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetHeading}>
+                <BrandLogo height={40} />
+                <Text accessibilityRole="header" style={styles.title}>{done ? 'Payment complete' : title}</Text>
               </View>
               <Pressable
                 onPress={onClose}
@@ -178,27 +213,6 @@ export function MitumbaPaySessionSheet({
                 <Text style={styles.closeText}>×</Text>
               </Pressable>
             </View>
-            <Text style={styles.eyebrow}>AMOUNT DUE</Text>
-            <Text style={styles.amount}>{amountLabel}</Text>
-            {context && context.line_items.length > 0 ? (
-              <View style={styles.lines}>
-                {context.line_items.map((item) => (
-                  <View key={item.label} style={styles.line}>
-                    <Text style={styles.lineLabel}>{item.label}</Text>
-                    <View style={styles.dots} />
-                    <Text style={styles.lineValue}>
-                      {money(item.amount)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-            {context ? <Text style={styles.order}>Ref · {context.reference}</Text> : null}
-          </View>
-
-          <View style={styles.sheet}>
-            <View style={styles.handle} />
-            <Text style={styles.title}>{done ? 'Payment complete' : title}</Text>
 
             {refusal && !done ? (
               <>
@@ -213,76 +227,118 @@ export function MitumbaPaySessionSheet({
               <Outcome message={message} success />
             ) : (
               <>
-                <View style={styles.methods} accessibilityRole="radiogroup">
-                  {methods.map((m) => {
-                    const key = methodDescriptorKey(m)
-                    const active = key === selectedKey
-                    const unavailable = m.status === 'temporarily_unavailable'
+                <View style={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Choose payment method">
+                  {tabs.map((tab) => {
+                    const active = tab.type === activeTab
                     return (
                       <Pressable
-                        key={key}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: active, disabled: unavailable }}
-                        disabled={unavailable}
-                        onPress={() => setSelectedKey(key)}
-                        style={[
-                          styles.method,
-                          active ? styles.methodActive : null,
-                          unavailable ? styles.methodDisabled : null,
-                        ]}
+                        key={tab.type}
+                        accessibilityRole="tab"
+                        accessibilityLabel={tab.enabled ? tab.label : `${tab.label}, temporarily unavailable`}
+                        accessibilityState={{ selected: active, disabled: !tab.enabled }}
+                        disabled={!tab.enabled}
+                        onPress={() => chooseTab(tab.type)}
+                        style={[styles.tab, active ? styles.tabActive : null]}
                       >
-                        <View style={styles.methodCopy}>
-                          <Text style={[styles.methodTitle, active ? styles.methodTitleActive : null]}>
-                            {m.display_name}
-                          </Text>
-                          {unavailable ? (
-                            <Text style={styles.methodHint}>Temporarily unavailable</Text>
-                          ) : null}
-                        </View>
-                        <View style={[styles.radio, active ? styles.radioActive : null]}>
-                          {active ? <View style={styles.radioDot} /> : null}
-                        </View>
+                        <Text
+                          style={[
+                            styles.tabText,
+                            active ? styles.tabTextActive : null,
+                            tab.enabled ? null : styles.tabTextDisabled,
+                          ]}
+                        >
+                          {tab.label}
+                        </Text>
                       </Pressable>
                     )
                   })}
                 </View>
 
-                {savedHere.length > 0 && !methodUnavailable ? (
-                  <View style={styles.saved} accessibilityLabel="Saved numbers">
-                    <Text style={styles.fieldLabel}>Saved numbers</Text>
-                    <View style={styles.chips}>
-                      {savedHere.map((choice) => {
-                        const active = choice.value === typedPhone
-                        return (
-                          <Pressable
-                            key={choice.value}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: active, disabled: busy }}
-                            disabled={busy}
-                            onPress={() => setFieldValues((prev) => ({ ...prev, phone: choice.value }))}
-                            style={[styles.chip, active ? styles.chipActive : null]}
-                          >
-                            <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>{choice.label}</Text>
-                          </Pressable>
-                        )
-                      })}
+                {activeTab === 'card' ? (
+                  <View style={styles.cardNote}>
+                    <View style={styles.cardIcon}><View style={styles.cardGlyph} /></View>
+                    <View style={styles.cardCopy}>
+                      <Text style={styles.cardTitle}>Secure card checkout</Text>
+                      <Text style={styles.cardText}>
+                        Your card details are entered on our PCI-compliant payment page. Mitumba never stores your card number.
+                      </Text>
                     </View>
                   </View>
-                ) : null}
+                ) : networks.length === 0 ? (
+                  <Text style={styles.note}>Mobile money isn’t available for this payment. Please choose another method.</Text>
+                ) : (
+                  <>
+                    <View style={styles.group} accessibilityRole="radiogroup" accessibilityLabel="Mobile money network">
+                      <Text style={styles.caption}>PAY FROM</Text>
+                      <View style={styles.chips}>
+                        {networks.map((m) => {
+                          const key = methodDescriptorKey(m)
+                          const active = key === selectedKey
+                          const unavailable = m.status === 'temporarily_unavailable'
+                          return (
+                            <Pressable
+                              key={key}
+                              accessibilityRole="radio"
+                              accessibilityState={{ selected: active, disabled: unavailable }}
+                              disabled={unavailable || busy}
+                              onPress={() => setSelectedKey(key)}
+                              style={[styles.chip, active ? styles.chipActive : null, unavailable ? styles.chipDisabled : null]}
+                            >
+                              <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>
+                                {unavailable ? `${m.display_name} · Temporarily unavailable` : m.display_name}
+                              </Text>
+                            </Pressable>
+                          )
+                        })}
+                      </View>
+                    </View>
 
-                {selected && !methodUnavailable
-                  ? selected.input_fields.map((field) => (
-                      <Field
-                        key={field.name}
-                        field={field}
-                        value={fieldValues[field.name] ?? ''}
-                        onChange={(v) =>
-                          setFieldValues((prev) => ({ ...prev, [field.name]: v }))
-                        }
+                    {savedHere.length > 0 && !methodUnavailable ? (
+                      <View style={styles.group} accessibilityLabel="Saved numbers">
+                        <Text style={styles.caption}>SAVED NUMBERS</Text>
+                        <View style={styles.chips}>
+                          {savedHere.map((choice) => {
+                            const active = choice.value === typedPhone
+                            return (
+                              <Pressable
+                                key={choice.value}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: active, disabled: busy }}
+                                disabled={busy}
+                                onPress={() => setFieldValues((prev) => ({ ...prev, phone: choice.value }))}
+                                style={[styles.chip, active ? styles.chipActive : null]}
+                              >
+                                <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>{choice.label}</Text>
+                              </Pressable>
+                            )
+                          })}
+                        </View>
+                      </View>
+                    ) : null}
+
+                    {phoneField && !methodUnavailable ? (
+                      <PhoneField
+                        field={phoneField}
+                        value={fieldValues.phone ?? ''}
+                        valid={typeof typedPhone === 'string'}
+                        invalid={phoneInvalid}
+                        networkName={selected?.display_name ?? ''}
+                        onChange={(v) => setFieldValues((prev) => ({ ...prev, phone: v }))}
                         editable={!busy}
                       />
-                    ))
-                  : null}
+                    ) : null}
+                  </>
+                )}
+
+                {otherFields.map((field) => (
+                  <Field
+                    key={field.name}
+                    field={field}
+                    value={fieldValues[field.name] ?? ''}
+                    onChange={(v) => setFieldValues((prev) => ({ ...prev, [field.name]: v }))}
+                    editable={!busy}
+                  />
+                ))}
 
                 {canSave ? (
                   <View style={styles.saveRow}>
@@ -317,13 +373,67 @@ export function MitumbaPaySessionSheet({
               </>
             )}
 
-            <View style={styles.security}>
-              <Text style={styles.securityText}>Encrypted and securely processed by Mitumba</Text>
-            </View>
+            <Text style={styles.securityText}>Encrypted and securely processed · Powered by Mitumba</Text>
           </View>
         </ScrollView>
       </View>
     </Modal>
+  )
+}
+
+function SummaryLine({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <View style={styles.line}>
+      <Text style={[styles.lineLabel, strong ? styles.lineStrong : null]}>{label}</Text>
+      <View style={styles.dots} />
+      <Text style={[styles.lineValue, strong ? styles.lineStrong : null]}>{value}</Text>
+    </View>
+  )
+}
+
+function PhoneField({
+  field,
+  value,
+  valid,
+  invalid,
+  networkName,
+  onChange,
+  editable,
+}: {
+  field: CheckoutInputField
+  value: string
+  valid: boolean
+  invalid: boolean
+  networkName: string
+  onChange: (v: string) => void
+  editable: boolean
+}) {
+  const hint = invalid
+    ? `Enter a valid mobile number${field.example ? `, for example ${field.example}` : ''}`
+    : `A secure ${networkName} prompt will appear on this phone.`
+  return (
+    <View style={styles.group}>
+      <Text style={styles.fieldLabel}>{field.label}</Text>
+      <View style={[styles.underline, invalid ? styles.underlineError : null]}>
+        <View style={styles.phoneGlyph} />
+        <TextInput
+          value={value}
+          onChangeText={onChange}
+          placeholder={field.example ?? ''}
+          placeholderTextColor={t.color.faint}
+          keyboardType="phone-pad"
+          editable={editable}
+          style={styles.phoneInput}
+          accessibilityLabel={field.label}
+        />
+        {valid ? (
+          <View style={styles.valid} accessibilityLabel="Valid number">
+            <Text style={styles.validText}>✓</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={[styles.hint, invalid ? styles.hintError : null]}>{hint}</Text>
+    </View>
   )
 }
 
@@ -339,10 +449,9 @@ function Field({
   editable: boolean
 }) {
   return (
-    <View style={styles.fieldGroup}>
+    <View style={styles.group}>
       <Text style={styles.fieldLabel}>{field.label}</Text>
-      <View style={styles.inputWrap}>
-        {field.calling_code ? <Text style={styles.country}>{field.calling_code}</Text> : null}
+      <View style={styles.underline}>
         <TextInput
           value={value}
           onChangeText={onChange}
@@ -350,7 +459,7 @@ function Field({
           placeholderTextColor={t.color.faint}
           keyboardType={field.type === 'tel' ? 'phone-pad' : 'default'}
           editable={editable}
-          style={styles.input}
+          style={styles.phoneInput}
           accessibilityLabel={field.label}
         />
       </View>
@@ -373,6 +482,7 @@ function Outcome({ message, success, loading, refused }: { message: string; succ
   )
 }
 
+// Measurements follow the hosted checkout's phone layout (packages/react WIDGET_CSS, max-width 680px).
 const styles = StyleSheet.create({
   scrim: { flex: 1, backgroundColor: t.color.scrim, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject },
@@ -385,124 +495,131 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   checkoutContent: { flexGrow: 1 },
-  hero: { position: 'relative', paddingTop: t.space.lg, paddingHorizontal: t.space.lg, paddingBottom: 50 },
-  heroHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: t.space.sm },
-  brandText: { color: t.color.onGreen, fontSize: 14, fontWeight: '700' },
-  closeButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.13)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeText: { color: t.color.onGreen, fontSize: 25, lineHeight: 27, fontWeight: '300' },
+  hero: { paddingTop: 25, paddingHorizontal: 22, paddingBottom: 56 },
   eyebrow: {
     marginTop: 26,
-    color: t.color.onGreenMuted,
+    color: 'rgba(255,255,255,0.68)',
     fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.5,
+    letterSpacing: 1.4,
     textAlign: 'center',
   },
   amount: {
-    marginTop: 5,
+    marginTop: 6,
     color: t.color.onGreen,
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: '700',
-    letterSpacing: -0.8,
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: '600',
+    letterSpacing: -1.3,
     textAlign: 'center',
   },
-  lines: { marginTop: 20, gap: 8 },
-  line: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  lineLabel: { color: t.color.onGreenMuted, fontSize: 12 },
-  dots: { flex: 1, borderBottomWidth: 1, borderStyle: 'dotted', borderColor: 'rgba(255,255,255,0.3)' },
-  lineValue: { color: t.color.onGreen, fontSize: 12, fontWeight: '600' },
-  order: { marginTop: 16, color: t.color.onGreenMuted, fontSize: 11, textAlign: 'center' },
+  lines: { marginTop: 22, gap: 11 },
+  line: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  lineLabel: { color: 'rgba(255,255,255,0.78)', fontSize: 13 },
+  dots: { flex: 1, borderBottomWidth: 1, borderStyle: 'dotted', borderColor: 'rgba(255,255,255,0.38)' },
+  lineValue: { color: t.color.onGreen, fontSize: 13, fontWeight: '600' },
+  lineStrong: { color: t.color.onGreen, fontSize: 14, fontWeight: '800' },
+  rule: { height: 1, marginVertical: 8, backgroundColor: 'rgba(255,255,255,0.22)' },
   sheet: {
-    marginTop: -26,
-    paddingTop: 12,
-    paddingHorizontal: t.space.lg,
-    paddingBottom: t.space.lg,
+    flexGrow: 1,
+    marginTop: -30,
+    paddingTop: 27,
+    paddingHorizontal: 22,
+    paddingBottom: 22,
     backgroundColor: t.color.surface,
     borderTopLeftRadius: t.radius.xl,
     borderTopRightRadius: t.radius.xl,
   },
-  handle: { alignSelf: 'center', width: 42, height: 4, borderRadius: 2, backgroundColor: t.color.border, marginBottom: 18 },
-  title: { color: t.color.ink, fontSize: 22, lineHeight: 28, fontWeight: '700', letterSpacing: -0.4 },
-  methods: { marginTop: 20, gap: 10 },
-  method: {
-    minHeight: 60,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: t.color.border,
-    borderRadius: t.radius.md,
-    backgroundColor: t.color.surface,
-  },
-  methodActive: { borderColor: t.color.green, backgroundColor: t.color.greenSoft },
-  methodDisabled: { opacity: 0.5 },
-  methodCopy: { flex: 1 },
-  methodTitle: { color: t.color.ink, fontSize: 14, fontWeight: '600' },
-  methodTitleActive: { color: t.color.greenDark },
-  methodHint: { marginTop: 2, color: t.color.muted, fontSize: 11 },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: t.color.border,
+  sheetHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20 },
+  sheetHeading: { flex: 1, gap: 5 },
+  title: { color: t.color.ink, fontSize: 22, lineHeight: 26, fontWeight: '500', letterSpacing: -0.8 },
+  closeButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F6F7F5',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioActive: { borderColor: t.color.green },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: t.color.green },
-  fieldGroup: { marginTop: 20 },
-  saved: { marginTop: 20 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, backgroundColor: t.color.field, borderWidth: 1, borderColor: t.color.border },
-  chipActive: { backgroundColor: t.color.green, borderColor: t.color.green },
-  chipText: { color: t.color.ink, fontSize: 12 },
+  closeText: { color: '#607066', fontSize: 24, lineHeight: 26, fontWeight: '300' },
+  tabs: { flexDirection: 'row', gap: 22, marginTop: 25, borderBottomWidth: 1, borderBottomColor: '#ECEFEC' },
+  tab: { paddingBottom: 14, marginBottom: -1, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabActive: { borderBottomColor: t.color.green },
+  tabText: { color: '#68716B', fontSize: 14 },
+  tabTextActive: { color: t.color.green, fontWeight: '700' },
+  tabTextDisabled: { color: '#B9BEBA' },
+  group: { marginTop: 22 },
+  caption: { marginBottom: 10, color: '#8B938E', fontSize: 11, letterSpacing: 0.9 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  chip: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: t.radius.pill, backgroundColor: '#F5F6F4' },
+  chipActive: { backgroundColor: t.color.green },
+  chipDisabled: { opacity: 0.5 },
+  chipText: { color: '#59615C', fontSize: 13 },
   chipTextActive: { color: t.color.onGreen, fontWeight: '600' },
-  saveRow: { marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  saveText: { flex: 1, color: t.color.muted, fontSize: 13 },
-  fieldLabel: { color: t.color.muted, fontSize: 12, marginBottom: 7 },
-  inputWrap: {
-    minHeight: 52,
+  note: {
+    marginTop: 22,
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EDF0ED',
+    backgroundColor: '#F7F9F7',
+    color: '#59615C',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  cardNote: {
+    marginTop: 22,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EDF0ED',
+    backgroundColor: '#F7F9F7',
+  },
+  cardIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#E9F5EC', alignItems: 'center', justifyContent: 'center' },
+  cardGlyph: { width: 20, height: 14, borderRadius: 2, borderWidth: 1.6, borderColor: t.color.green },
+  cardCopy: { flex: 1 },
+  cardTitle: { color: t.color.ink, fontSize: 14, fontWeight: '700' },
+  cardText: { marginTop: 6, color: '#707973', fontSize: 12, lineHeight: 19 },
+  fieldLabel: { marginBottom: 7, color: '#89908B', fontSize: 12 },
+  underline: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: t.color.border,
-    borderRadius: t.radius.md,
-    backgroundColor: t.color.field,
-    paddingHorizontal: 13,
+    gap: 12,
+    paddingTop: 4,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DFE4E0',
   },
-  country: { color: t.color.ink, fontSize: 13, fontWeight: '700', paddingRight: 12, borderRightWidth: 1, borderRightColor: t.color.border },
-  input: { flex: 1, color: t.color.ink, fontSize: 16, paddingHorizontal: 12, paddingVertical: 12 },
+  underlineError: { borderBottomColor: '#C24B3E' },
+  phoneGlyph: { width: 12, height: 19, borderRadius: 3, borderWidth: 1.6, borderColor: '#7E8981' },
+  phoneInput: { flex: 1, paddingVertical: 6, color: t.color.ink, fontSize: 17, letterSpacing: 0.7 },
+  valid: { width: 21, height: 21, borderRadius: 11, backgroundColor: '#E9F6ED', alignItems: 'center', justifyContent: 'center' },
+  validText: { color: t.color.green, fontSize: 12, fontWeight: '800' },
+  hint: { marginTop: 9, color: '#9BA19D', fontSize: 11 },
+  hintError: { color: '#C24B3E' },
+  saveRow: { marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  saveText: { flex: 1, color: '#59615C', fontSize: 13 },
   errorMessage: {
-    marginTop: 12,
-    padding: 10,
-    borderRadius: t.radius.sm,
+    marginTop: 18,
+    padding: 11,
+    borderRadius: 9,
     backgroundColor: t.color.dangerSoft,
-    color: t.color.danger,
+    color: '#A13A30',
     fontSize: 12,
   },
   payButton: {
     minHeight: 54,
-    marginTop: 20,
-    borderRadius: t.radius.md,
+    marginTop: 26,
+    borderRadius: 4,
     backgroundColor: t.color.green,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  payButtonDisabled: { opacity: 0.48 },
+  payButtonDisabled: { opacity: 0.56 },
   payButtonText: { color: t.color.onGreen, fontSize: 15, fontWeight: '700' },
-  security: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 14 },
-  securityText: { color: t.color.faint, fontSize: 10 },
+  securityText: { marginTop: 16, color: '#9AA29D', fontSize: 10, textAlign: 'center' },
   outcome: { alignItems: 'center', paddingVertical: 42 },
   outcomeIcon: {
     width: 72,
@@ -519,4 +636,3 @@ const styles = StyleSheet.create({
   outcomeRefusedText: { color: t.color.danger },
   outcomeMessage: { maxWidth: 280, marginTop: 18, color: t.color.muted, fontSize: 13, lineHeight: 20, textAlign: 'center' },
 })
-
