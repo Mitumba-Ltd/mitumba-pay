@@ -13,6 +13,7 @@ import { payTheme as t } from './theme'
 import { type UseCheckoutResult, type CheckoutPhase } from './useCheckout'
 import { isValidPhone, nationalPart, normalizePhone, type PhoneFormat } from '@mitumba/pay'
 import { unavailableMessage } from './unavailable'
+import { BrandLogo } from './BrandLogo'
 import { initialNetwork, isNetworkPayable, type NativeNetwork } from './methods'
 
 export type NativePaymentMethod = 'mobile_money' | 'card'
@@ -135,7 +136,7 @@ export function MitumbaPaySheet({
           <View style={styles.hero}>
             <View style={styles.heroPattern} />
             <View style={styles.heroHeader}>
-              <View style={styles.brand}><Text style={styles.brandMark}>M</Text><Text style={styles.brandText}>Mitumba Pay</Text></View>
+              <View style={styles.brand}><BrandLogo /><Text style={styles.brandText}>Mitumba Pay</Text></View>
               <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close payment" style={styles.closeButton}><Text style={styles.closeText}>×</Text></Pressable>
             </View>
             <Text style={styles.eyebrow}>AMOUNT DUE</Text>
@@ -257,7 +258,6 @@ const styles = StyleSheet.create({
   heroPattern: { position: 'absolute', top: -80, right: -60, width: 220, height: 220, borderRadius: 110, borderWidth: 34, borderColor: 'rgba(255,255,255,0.055)' },
   heroHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: t.space.sm },
-  brandMark: { width: 30, height: 30, borderRadius: 10, textAlign: 'center', textAlignVertical: 'center', backgroundColor: 'rgba(255,255,255,0.16)', color: t.color.onGreen, fontWeight: '800' },
   brandText: { color: t.color.onGreen, fontSize: 14, fontWeight: '700' },
   closeButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.13)', alignItems: 'center', justifyContent: 'center' },
   closeText: { color: t.color.onGreen, fontSize: 25, lineHeight: 27, fontWeight: '300' },
