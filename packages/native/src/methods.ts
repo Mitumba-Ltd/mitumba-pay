@@ -54,3 +54,46 @@ export function sessionMethodFor(
   }
   return null
 }
+
+/** A tab in the session sheet: one per method type, as the hosted checkout shows them. */
+export interface SessionMethodTab {
+  type: 'mobile_money' | 'card'
+  label: string
+  /** False when the tab is shown greyed and cannot be chosen. */
+  enabled: boolean
+}
+
+/**
+ * The method tabs for a session's descriptors: "Mobile payment" when any mobile-money network is
+ * offered (its networks show their own availability), then "Card" when the session lists card, greyed
+ * while card is temporarily unavailable. Types this SDK cannot pay are not shown.
+ */
+export function sessionMethodTabs(methods: readonly CheckoutMethodDescriptor[]): SessionMethodTab[] {
+  const tabs: SessionMethodTab[] = []
+  if (methods.some((m) => m.type === 'mobile_money' && m.network)) {
+    tabs.push({ type: 'mobile_money', label: 'Mobile payment', enabled: true })
+  }
+  const card = methods.find((m) => m.type === 'card')
+  if (card) tabs.push({ type: 'card', label: 'Card', enabled: card.status === 'available' })
+  return tabs
+}
+
+/**
+ * The descriptor to preselect: the preferred network when it can be paid now, else the first payable
+ * mobile-money network, else card when available, else the first mobile-money network so its
+ * unavailability shows. Null when the session offers nothing this SDK can render.
+ */
+export function initialSessionMethod(
+  methods: readonly CheckoutMethodDescriptor[],
+  preferredNetwork: string | undefined,
+): CheckoutMethodDescriptor | null {
+  const mobile = methods.filter((m) => m.type === 'mobile_money' && m.network)
+  const payable = mobile.filter((m) => m.status === 'available')
+  return (
+    payable.find((m) => preferredNetwork !== undefined && m.network === preferredNetwork) ??
+    payable[0] ??
+    methods.find((m) => m.type === 'card' && m.status === 'available') ??
+    mobile[0] ??
+    null
+  )
+}

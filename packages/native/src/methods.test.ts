@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CheckoutMethodDescriptor } from '@mitumba/pay'
-import { descriptorPhone, initialNetwork, isNetworkPayable, sessionMethodFor } from './methods'
+import { descriptorPhone, initialNetwork, initialSessionMethod, isNetworkPayable, sessionMethodFor, sessionMethodTabs } from './methods'
 
 const phoneField = { name: 'phone', type: 'tel' as const, required: true, label: 'M-Pesa number', calling_code: '+254' }
 
@@ -69,5 +69,43 @@ describe('network choice', () => {
     expect(initialNetwork(networks, undefined)).toBe('mpesa')
     expect(initialNetwork([{ id: 'mpesa', name: 'M-Pesa', available: false }], undefined)).toBeNull()
     expect(initialNetwork([], 'mpesa')).toBeNull()
+  })
+})
+
+describe('sessionMethodTabs', () => {
+  const offline = (m: CheckoutMethodDescriptor): CheckoutMethodDescriptor => ({ ...m, status: 'temporarily_unavailable' })
+
+  it('shows mobile payment, then card greyed while card is temporarily unavailable', () => {
+    expect(sessionMethodTabs([mpesa, offline(airtel), offline(card)])).toEqual([
+      { type: 'mobile_money', label: 'Mobile payment', enabled: true },
+      { type: 'card', label: 'Card', enabled: false },
+    ])
+  })
+
+  it('enables card when it is available, and omits what the session does not list', () => {
+    expect(sessionMethodTabs([card])).toEqual([{ type: 'card', label: 'Card', enabled: true }])
+    expect(sessionMethodTabs([mpesa])).toEqual([{ type: 'mobile_money', label: 'Mobile payment', enabled: true }])
+  })
+
+  it('skips mobile money without a network and method types it cannot pay', () => {
+    const legacy: CheckoutMethodDescriptor = { type: 'mobile_money', display_name: 'Mobile money', status: 'available', input_fields: [phoneField] }
+    expect(sessionMethodTabs([legacy, { ...card, type: 'bank_transfer' }])).toEqual([])
+  })
+})
+
+describe('initialSessionMethod', () => {
+  const offline = (m: CheckoutMethodDescriptor): CheckoutMethodDescriptor => ({ ...m, status: 'temporarily_unavailable' })
+
+  it('prefers the saved network when it can be paid now, else the first payable network', () => {
+    expect(initialSessionMethod([mpesa, airtel], 'airtel_money')).toBe(airtel)
+    expect(initialSessionMethod([mpesa, offline(airtel)], 'airtel_money')).toBe(mpesa)
+    expect(initialSessionMethod([offline(mpesa), airtel], undefined)).toBe(airtel)
+  })
+
+  it('falls back to available card, then to the first network so its state shows', () => {
+    expect(initialSessionMethod([offline(mpesa), card], undefined)).toBe(card)
+    const down = offline(mpesa)
+    expect(initialSessionMethod([down, offline(card)], undefined)).toBe(down)
+    expect(initialSessionMethod([offline(card)], undefined)).toBeNull()
   })
 })

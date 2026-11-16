@@ -13,8 +13,8 @@ export type {
   NativeLineItem,
   NativePayInput,
 } from './MitumbaPaySheet'
-export { descriptorPhone, initialNetwork, isNetworkPayable, sessionMethodFor } from './methods'
-export type { NativeNetwork } from './methods'
+export { descriptorPhone, initialNetwork, initialSessionMethod, isNetworkPayable, sessionMethodFor, sessionMethodTabs } from './methods'
+export type { NativeNetwork, SessionMethodTab } from './methods'
 
 // Session-driven checkout (RFC 0001).
 export { useCheckoutSession } from './useCheckoutSession'
