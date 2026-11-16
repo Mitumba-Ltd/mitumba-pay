@@ -112,6 +112,22 @@ describe('MitumbaPayWidget', () => {
     expect(onPay).toHaveBeenCalledWith({ method: 'card' })
   })
 
+  it('shows an unavailable method as a greyed tab that cannot be chosen', () => {
+    render(<MitumbaPayWidget {...baseProps} methods={['mobile_money']} unavailableMethods={['card']} />)
+
+    const card = screen.getByRole('tab', { name: 'Card, temporarily unavailable' }) as HTMLButtonElement
+    expect(card.disabled).toBe(true)
+    expect(card.className).toContain('is-unavailable')
+    fireEvent.click(card)
+    expect(screen.queryByText('Secure card checkout')).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Mobile payment' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('treats a method listed as both available and unavailable as available', () => {
+    render(<MitumbaPayWidget {...baseProps} methods={['mobile_money', 'card']} unavailableMethods={['card']} />)
+    expect((screen.getByRole('tab', { name: 'Card' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('renders a focused out-of-band confirmation state', () => {
     render(
       <MitumbaPayWidget
