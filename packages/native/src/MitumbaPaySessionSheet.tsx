@@ -21,18 +21,18 @@ import { type UseCheckoutSessionResult, type SessionPhase } from './useCheckoutS
 
 const PHASE_MESSAGE: Record<SessionPhase, string> = {
   idle: '',
-  loading_context: 'Loading secure checkoutâ€¦',
+  loading_context: 'Loading secure checkout…',
   ready: '',
-  initiating: 'Starting your secure paymentâ€¦',
+  initiating: 'Starting your secure payment…',
   awaiting_confirmation: 'Check your phone and enter your PIN to approve.',
-  redirecting: 'Opening secure checkoutâ€¦',
-  polling: 'Weâ€™re confirming your paymentâ€¦',
+  redirecting: 'Opening secure checkout…',
+  polling: 'We’re confirming your payment…',
   paid: 'Payment received. Your order is confirmed.',
-  failed: 'That payment didnâ€™t go through.',
-  retryable: 'Payment wasnâ€™t completed. You can safely try again.',
+  failed: 'That payment didn’t go through.',
+  retryable: 'Payment wasn’t completed. You can safely try again.',
   timeout: 'Still confirming. Keep this sheet open or check your order shortly.',
   unavailable: unavailableMessage(null),
-  error: 'We couldnâ€™t load or start the payment.',
+  error: 'We couldn’t load or start the payment.',
 }
 
 export interface MitumbaPaySessionSheetProps {
